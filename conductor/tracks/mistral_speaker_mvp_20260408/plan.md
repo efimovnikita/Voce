@@ -12,14 +12,14 @@
     - [ ] Implement: Configure `share_target` in `manifest.json`
 - [x] Task: Conductor - User Manual Verification 'Project Initialization & PWA Setup' (Protocol in workflow.md)
 
-## Phase 2: Core UI Components
+## Phase 2: Core UI Components [checkpoint: d8e9243]
 - [x] Task: Create Settings Screen (API Key & Voice Selection) (313e976)
     - [ ] Write Tests: Verify input field and select dropdown
     - [ ] Implement: Build Settings component with `localStorage` persistence
 - [x] Task: Create Player UI (Controls & Visuals) (17d758a)
     - [ ] Write Tests: Verify Play/Pause and Rewind buttons
     - [ ] Implement: Build Player component with progress bar and waveform placeholder
-- [ ] Task: Conductor - User Manual Verification 'Core UI Components' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Core UI Components' (Protocol in workflow.md)
 
 ## Phase 3: Mistral API & Audio Logic
 - [ ] Task: Implement Mistral API Client
