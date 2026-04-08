@@ -34,7 +34,7 @@
 - [x] Task: Handle Incoming Shared Text (f76bc16)
     - [ ] Write Tests: Mock URL parameters for `share_target`
     - [ ] Implement: Add logic to parse shared text and initiate playback
-- [ ] Task: Final Integration & Styling
+- [~] Task: Final Integration & Styling
     - [ ] Write Tests: Verify end-to-end flow (Mocked API)
     - [ ] Implement: Connect all components and apply final Tailwind styling
 - [ ] Task: Conductor - User Manual Verification 'Integration & Share Handling' (Protocol in workflow.md)

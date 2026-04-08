@@ -6,5 +6,6 @@ describe('App component', () => {
   it('renders the Mistral Speaker header', () => {
     render(<App />);
     expect(screen.getByRole('heading', { name: /Mistral Speaker/i, level: 1 })).toBeInTheDocument();
+    expect(screen.getByText(/How to use/i)).toBeInTheDocument();
   });
 });
