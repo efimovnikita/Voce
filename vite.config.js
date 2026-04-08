@@ -37,6 +37,9 @@ export default defineConfig({
             url: 'url'
           }
         }
+      },
+      devOptions: {
+        enabled: true
       }
     })
   ],
