@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Settings from './components/Settings'
 import Player from './components/Player'
-import { fetchVoices, generateSpeech } from './api/mistral'
+import { fetchVoices, generateSpeechStreaming } from './api/mistral'
 import { splitIntoChunks } from './utils/chunking'
 
 function App() {
@@ -21,7 +21,9 @@ function App() {
     if (apiKey) {
       try {
         setStatus('Loading voices...');
+        console.log('Fetching voices...');
         const fetchedVoices = await fetchVoices(apiKey);
+        console.log('Voices fetched:', fetchedVoices.length);
         setVoices(fetchedVoices);
         setStatus('Ready');
       } catch (error) {
@@ -37,7 +39,9 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     const text = params.get('text') || params.get('title') || params.get('url');
     if (text) {
-      setSharedText(decodeURIComponent(text));
+      const decoded = decodeURIComponent(text);
+      console.log('Shared text received:', decoded.substring(0, 50) + '...');
+      setSharedText(decoded);
     }
   }, []);
 
@@ -62,6 +66,7 @@ function App() {
     }
 
     if (currentChunkIndexRef.current >= chunksRef.current.length) {
+      console.log('All chunks played.');
       setIsPlaying(false);
       setProgress(100);
       setStatus('Finished reading');
@@ -71,38 +76,53 @@ function App() {
     try {
       setStatus(`Generating audio for part ${currentChunkIndexRef.current + 1} of ${chunksRef.current.length}...`);
       const text = chunksRef.current[currentChunkIndexRef.current];
-      const audioBlob = await generateSpeech(apiKey, text, voiceId);
+      console.log(`Requesting streaming speech for chunk ${currentChunkIndexRef.current + 1}...`);
+      
+      const audioBlob = await generateSpeechStreaming(apiKey, text, voiceId);
+      console.log('Audio blob collected from stream:', audioBlob.size, 'bytes');
+      
       const audioUrl = URL.createObjectURL(audioBlob);
       
       audioRef.current.src = audioUrl;
-      audioRef.current.play();
-      setIsPlaying(true);
+      
+      console.log('Attempting to play audio...');
+      try {
+        await audioRef.current.play();
+        setIsPlaying(true);
+        console.log('Playback started.');
+      } catch (playError) {
+        console.error('Audio play() failed:', playError);
+        throw playError;
+      }
       
       const totalChunks = chunksRef.current.length;
       setProgress(((currentChunkIndexRef.current) / totalChunks) * 100);
       
       audioRef.current.onended = () => {
+        console.log(`Chunk ${currentChunkIndexRef.current + 1} ended.`);
         URL.revokeObjectURL(audioUrl);
         currentChunkIndexRef.current++;
         playNextChunk();
       };
     } catch (error) {
-      console.error('Playback error:', error);
+      console.error('Playback process error:', error);
       setStatus(`Playback error: ${error.message}`);
       setIsPlaying(false);
     }
   };
 
   const handlePlayPause = () => {
+    console.log('Play/Pause clicked. current isPlaying:', isPlaying);
     if (isPlaying) {
       audioRef.current.pause();
       setIsPlaying(false);
     } else {
       if (audioRef.current.src && !audioRef.current.ended && audioRef.current.readyState > 0) {
-        audioRef.current.play();
+        audioRef.current.play().catch(e => console.error('Resume failed:', e));
         setIsPlaying(true);
       } else if (sharedText) {
         chunksRef.current = splitIntoChunks(sharedText);
+        console.log(`Starting playback. Total chunks: ${chunksRef.current.length}`);
         currentChunkIndexRef.current = 0;
         playNextChunk();
       } else {
@@ -137,7 +157,7 @@ function App() {
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Mistral Speaker</h1>
           <p className="text-slate-500 text-sm font-medium">
-            Status: <span className={status.startsWith('Error') ? 'text-red-500' : 'text-blue-600'}>{status}</span>
+            Status: <span className={status.startsWith('Error') || status.includes('error') ? 'text-red-500' : 'text-blue-600'}>{status}</span>
           </p>
         </div>
         {sharedText && (

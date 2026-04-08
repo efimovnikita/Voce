@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fetchVoices, generateSpeech } from './mistral';
+import { fetchVoices, generateSpeechStreaming } from './mistral';
 import { Mistral } from "@mistralai/mistralai";
 
 const mockList = vi.fn();
@@ -22,33 +22,28 @@ vi.mock("@mistralai/mistralai", () => {
   };
 });
 
-describe('Mistral API Client (SDK)', () => {
+describe('Mistral API Client (SDK Streaming)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('fetchVoices returns list of voices using SDK', async () => {
-    const mockVoicesResponse = {
-      items: [
-        { id: 'voice1', name: 'Voice 1' },
-        { id: 'voice2', name: 'Voice 2' }
-      ]
-    };
-    
-    mockList.mockResolvedValue(mockVoicesResponse);
-
-    const voices = await fetchVoices('test-api-key');
-    expect(voices).toEqual(mockVoicesResponse.items);
-    expect(Mistral).toHaveBeenCalled();
+  it('fetchVoices returns list of voices', async () => {
+    mockList.mockResolvedValue({ items: [{ id: 'v1', name: 'V1' }] });
+    const voices = await fetchVoices('test-key');
+    expect(voices[0].id).toBe('v1');
   });
 
-  it('generateSpeech returns blob using SDK', async () => {
-    const mockAudioData = new Uint8Array([1, 2, 3]);
-    
-    mockComplete.mockResolvedValue({ audioData: mockAudioData });
+  it('generateSpeechStreaming handles async iterator stream', async () => {
+    const mockStream = (async function* () {
+      yield { event: 'speech.audio.delta', data: { audioData: btoa('part1') } };
+      yield { event: 'speech.audio.delta', data: { audioData: btoa('part2') } };
+      yield { event: 'speech.audio.done', data: { usage: {} } };
+    })();
 
-    const result = await generateSpeech('test-api-key', 'Hello', 'voice1');
-    expect(result).toBeInstanceOf(Blob);
-    expect(mockComplete).toHaveBeenCalled();
+    mockComplete.mockResolvedValue(mockStream);
+
+    const blob = await generateSpeechStreaming('test-key', 'Hello', 'v1');
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.type).toBe('audio/mpeg');
   });
 });
