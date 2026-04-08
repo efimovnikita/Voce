@@ -4,7 +4,7 @@
 - [x] Task: Initialize React project with Vite and Tailwind CSS (ba3259c)
     - [ ] Write Tests: Verify project structure and basic dependencies
     - [ ] Implement: Run `npm create vite@latest`, install Tailwind
-- [ ] Task: Configure PWA Manifest and Service Worker
+- [~] Task: Configure PWA Manifest and Service Worker
     - [ ] Write Tests: Verify manifest.json exists and has correct fields
     - [ ] Implement: Add `manifest.json`, register service worker
 - [ ] Task: Implement PWA Share Target
