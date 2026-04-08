@@ -3,8 +3,8 @@ import { render, screen } from '@testing-library/react';
 import App from './App';
 
 describe('App component', () => {
-  it('renders the Get started text', () => {
+  it('renders the Mistral Speaker header', () => {
     render(<App />);
-    expect(screen.getByText(/Get started/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Mistral Speaker/i, level: 1 })).toBeInTheDocument();
   });
 });
