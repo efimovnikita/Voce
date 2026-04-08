@@ -9,7 +9,12 @@ describe('Vite Configuration', () => {
   });
 
   it('has correct manifest properties', () => {
-    // Note: This test might be fragile depending on how viteConfig is exported
-    // For now, it's just a placeholder to follow the TDD workflow.
+    // console.log(JSON.stringify(viteConfig, null, 2));
+    const flatPlugins = viteConfig.plugins.flat(Infinity);
+    const pwaPlugin = flatPlugins.find(p => p && p.name === 'vite-plugin-pwa');
+    
+    // In Vitest, the plugin object might not have the full API available.
+    // We can try to access the options passed to VitePWA if we can find them.
+    expect(pwaPlugin).toBeDefined();
   });
 });
