@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Settings from './components/Settings'
 import Player from './components/Player'
+import Modal from './components/Modal'
 import { fetchVoices, generateSpeechStreaming } from './api/mistral'
 import { splitIntoChunks } from './utils/chunking'
 
@@ -11,6 +12,7 @@ function App() {
   const [status, setStatus] = useState('Ready');
   const [trigger, setTrigger] = useState(0);
   const [sharedText, setSharedText] = useState('');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   
   const audioRef = useRef(new Audio());
   const chunksRef = useRef([]);
@@ -49,7 +51,7 @@ function App() {
     loadVoices();
   }, [loadVoices, trigger]);
 
-  const playNextChunk = async () => {
+  const playNextChunk = async ().
     const apiKey = localStorage.getItem('mistral_api_key');
     const voiceId = localStorage.getItem('mistral_voice_id');
     
@@ -152,22 +154,30 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8 flex flex-col items-center">
+    <div className="min-h-screen bg-gray-900 text-white p-4 md:p-8 flex flex-col items-center">
       <header className="w-full max-w-lg mb-8 flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Mistral Speaker</h1>
-          <p className="text-slate-500 text-sm font-medium">
-            Status: <span className={status.startsWith('Error') || status.includes('error') ? 'text-red-500' : 'text-blue-600'}>{status}</span>
+          <h1 className="text-3xl font-black text-white tracking-tight">Voce</h1>
+          <p className="text-gray-400 text-sm font-medium">
+            Status: <span className={status.startsWith('Error') || status.includes('error') ? 'text-red-400' : 'text-blue-400'}>{status}</span>
           </p>
         </div>
-        {sharedText && (
-          <button 
-            onClick={handleReset}
-            className="text-xs font-bold uppercase tracking-wider text-slate-400 hover:text-red-500 transition-colors"
-          >
-            Clear
+        <div className="flex items-center space-x-4">
+          {sharedText && (
+            <button 
+              onClick={handleReset}
+              className="text-xs font-bold uppercase tracking-wider text-gray-500 hover:text-red-400 transition-colors"
+            >
+              Clear
+            </button>
+          )}
+          <button onClick={() => setIsSettingsOpen(true)} className="text-gray-400 hover:text-white transition-colors">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            </svg>
           </button>
-        )}
+        </div>
       </header>
 
       <main className="w-full max-w-lg space-y-8">
@@ -182,15 +192,15 @@ function App() {
         </section>
 
         {!sharedText && (
-          <section className="bg-blue-50 border border-blue-100 rounded-xl p-6 text-blue-800 space-y-3">
-            <h3 className="font-bold flex items-center">
+          <section className="bg-gray-800 border border-gray-700 rounded-xl p-6 text-gray-300 space-y-3">
+            <h3 className="font-bold flex items-center text-white">
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
               How to use
             </h3>
-            <ol className="text-sm space-y-2 list-decimal list-inside opacity-90">
-              <li>Enter your **Mistral API Key** below.</li>
+            <ol className="text-sm space-y-2 list-decimal list-inside opacity-80">
+              <li>Open **Settings** (gear icon) and enter your **Mistral API Key**.</li>
               <li>Select a **voice** from the list.</li>
               <li>Open any text or article in your browser.</li>
               <li>Use the system **"Share"** menu and select **Voce**.</li>
@@ -198,13 +208,16 @@ function App() {
             </ol>
           </section>
         )}
-
-        <section>
-          <Settings voices={voices} onSettingsChange={handleSettingsChange} />
-        </section>
       </main>
 
-      <footer className="mt-auto pt-12 pb-4 text-slate-400 text-[10px] uppercase tracking-widest font-bold">
+      <Modal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)}>
+        <Settings voices={voices} onSettingsChange={() => {
+          handleSettingsChange();
+          setIsSettingsOpen(false);
+        }} />
+      </Modal>
+
+      <footer className="mt-auto pt-12 pb-4 text-gray-500 text-[10px] uppercase tracking-widest font-bold">
         Powered by Mistral AI • PWA Enabled
       </footer>
     </div>
