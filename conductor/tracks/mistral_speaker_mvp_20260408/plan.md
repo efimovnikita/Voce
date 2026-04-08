@@ -21,14 +21,14 @@
     - [ ] Implement: Build Player component with progress bar and waveform placeholder
 - [x] Task: Conductor - User Manual Verification 'Core UI Components' (Protocol in workflow.md)
 
-## Phase 3: Mistral API & Audio Logic
+## Phase 3: Mistral API & Audio Logic [checkpoint: 7a96473]
 - [x] Task: Implement Mistral API Client (d94ba8d)
     - [ ] Write Tests: Mock API responses for voices and speech
     - [ ] Implement: Create API client for `fetchVoices` and `generateSpeech`
 - [x] Task: Implement Sequential Chunking Logic (fbfb72e)
     - [ ] Write Tests: Verify text splitting and sequential request handling
     - [ ] Implement: Add logic to split long text and queue audio generation
-- [ ] Task: Conductor - User Manual Verification 'Mistral API & Audio Logic' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Mistral API & Audio Logic' (Protocol in workflow.md)
 
 ## Phase 4: Integration & Share Handling
 - [ ] Task: Handle Incoming Shared Text
