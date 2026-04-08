@@ -13,7 +13,7 @@
 - [x] Task: Conductor - User Manual Verification 'Project Initialization & PWA Setup' (Protocol in workflow.md)
 
 ## Phase 2: Core UI Components
-- [~] Task: Create Settings Screen (API Key & Voice Selection)
+- [x] Task: Create Settings Screen (API Key & Voice Selection) (313e976)
     - [ ] Write Tests: Verify input field and select dropdown
     - [ ] Implement: Build Settings component with `localStorage` persistence
 - [ ] Task: Create Player UI (Controls & Visuals)
