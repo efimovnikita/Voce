@@ -32,7 +32,7 @@ export default defineConfig({
           }
         ],
         share_target: {
-          action: '/voce/',
+          action: '/Voce/',
           method: 'GET',
           enctype: 'application/x-www-form-urlencoded',
           params: {
