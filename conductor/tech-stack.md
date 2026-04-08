@@ -17,8 +17,9 @@
 
 ## 4. APIs & Services
 - **Speech Generation:** **Mistral AI TTS API**.
-  - `/v1/audio/speech/voices` (to fetch available voices).
-  - `/v1/audio/speech` (to generate the actual audio streams).
+  - **Official SDK:** `@mistralai/mistralai`.
+  - **Model:** `voxtral-mini-tts-2603`.
+  - **Streaming:** Used for responsive audio generation.
 - **Audio Handling:** Standard HTML5 `Audio` element for playback management.
 
 ## 5. Storage & State Management
