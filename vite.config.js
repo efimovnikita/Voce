@@ -13,12 +13,26 @@ export default defineConfig({
         short_name: 'Voce',
         description: 'Text-to-speech reader',
         theme_color: '#0f172a',
-        // ... (здесь ваши настройки иконок, не удаляйте их) ...
-
-        // ВОТ ЭТОТ БЛОК НУЖНО ДОБАВИТЬ:
+        background_color: '#0f172a', // Рекомендуется добавлять для WebAPK
+        start_url: '/voce/', // Обязательно для WebAPK
+        scope: '/voce/',     // Обязательно для WebAPK
+        display: 'standalone',
+        icons: [
+          {
+            src: 'pwa-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any maskable' // maskable позволяет Android адаптировать форму иконки
+          },
+          {
+            src: 'pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable'
+          }
+        ],
         share_target: {
-          // action ОБЯЗАТЕЛЬНО должен совпадать с вашим base (включая слеши)
-          action: '/Voce/', 
+          action: '/voce/',
           method: 'GET',
           enctype: 'application/x-www-form-urlencoded',
           params: {
