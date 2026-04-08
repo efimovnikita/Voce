@@ -22,7 +22,7 @@
 - [x] Task: Conductor - User Manual Verification 'Core UI Components' (Protocol in workflow.md)
 
 ## Phase 3: Mistral API & Audio Logic
-- [ ] Task: Implement Mistral API Client
+- [~] Task: Implement Mistral API Client
     - [ ] Write Tests: Mock API responses for voices and speech
     - [ ] Implement: Create API client for `fetchVoices` and `generateSpeech`
 - [ ] Task: Implement Sequential Chunking Logic
