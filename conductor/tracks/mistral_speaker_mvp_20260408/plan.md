@@ -25,7 +25,7 @@
 - [x] Task: Implement Mistral API Client (d94ba8d)
     - [ ] Write Tests: Mock API responses for voices and speech
     - [ ] Implement: Create API client for `fetchVoices` and `generateSpeech`
-- [~] Task: Implement Sequential Chunking Logic
+- [x] Task: Implement Sequential Chunking Logic (fbfb72e)
     - [ ] Write Tests: Verify text splitting and sequential request handling
     - [ ] Implement: Add logic to split long text and queue audio generation
 - [ ] Task: Conductor - User Manual Verification 'Mistral API & Audio Logic' (Protocol in workflow.md)
