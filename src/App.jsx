@@ -6,12 +6,12 @@ import { splitIntoChunks } from './utils/chunking'
 
 function App() {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [voices, setVoices] = useState([]);
   const [status, setStatus] = useState('Ready');
   const [trigger, setTrigger] = useState(0);
   const [sharedText, setSharedText] = useState('');
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false); // Состояние модального окна
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
   
   const audioRef = useRef(new Audio());
   const chunksRef = useRef([]);
@@ -57,7 +57,6 @@ function App() {
 
     if (currentChunkIndexRef.current >= chunksRef.current.length) {
       setIsPlaying(false);
-      setProgress(100);
       setStatus('Finished reading');
       return;
     }
@@ -71,11 +70,11 @@ function App() {
       
       audioRef.current.src = audioUrl;
       
+      // Применяем текущую скорость к новому аудио-чанку
+      audioRef.current.playbackRate = playbackRate;
+      
       await audioRef.current.play();
       setIsPlaying(true);
-      
-      const totalChunks = chunksRef.current.length;
-      setProgress(((currentChunkIndexRef.current) / totalChunks) * 100);
       
       audioRef.current.onended = () => {
         URL.revokeObjectURL(audioUrl);
@@ -112,6 +111,20 @@ function App() {
     }
   };
 
+  const handleSpeedChange = () => {
+    setPlaybackRate(prevRate => {
+      // Логика цикла: 1 -> 1.25 -> 1.5 -> 1
+      const nextRate = prevRate === 1 ? 1.25 : prevRate === 1.25 ? 1.5 : 1;
+      
+      // Если аудио сейчас загружено, применяем скорость на лету
+      if (audioRef.current) {
+        audioRef.current.playbackRate = nextRate;
+      }
+      
+      return nextRate;
+    });
+  };
+
   const handleSettingsChange = () => {
     setTrigger(prev => prev + 1);
   };
@@ -142,7 +155,8 @@ function App() {
           isPlaying={isPlaying}
           onPlayPause={handlePlayPause}
           onRewind={handleRewind}
-          progress={progress}
+          playbackRate={playbackRate}
+          onSpeedChange={handleSpeedChange}
         />
       </main>
 
