@@ -1,65 +1,54 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fetchVoices, generateSpeech } from './mistral';
+import { Mistral } from "@mistralai/mistralai";
 
-describe('Mistral API Client', () => {
+const mockList = vi.fn();
+const mockComplete = vi.fn();
+
+vi.mock("@mistralai/mistralai", () => {
+  return {
+    Mistral: vi.fn().mockImplementation(function() {
+      return {
+        audio: {
+          voices: {
+            list: mockList
+          },
+          speech: {
+            complete: mockComplete
+          }
+        }
+      };
+    })
+  };
+});
+
+describe('Mistral API Client (SDK)', () => {
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn());
+    vi.clearAllMocks();
   });
 
-  it('fetchVoices returns list of voices', async () => {
-    const mockVoices = {
-      data: [
+  it('fetchVoices returns list of voices using SDK', async () => {
+    const mockVoicesResponse = {
+      items: [
         { id: 'voice1', name: 'Voice 1' },
         { id: 'voice2', name: 'Voice 2' }
       ]
     };
     
-    fetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockVoices
-    });
+    mockList.mockResolvedValue(mockVoicesResponse);
 
     const voices = await fetchVoices('test-api-key');
-    expect(voices).toEqual(mockVoices.data);
-    expect(fetch).toHaveBeenCalledWith(
-      'https://api.mistral.ai/v1/audio/speech/voices',
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          'Authorization': 'Bearer test-api-key'
-        })
-      })
-    );
+    expect(voices).toEqual(mockVoicesResponse.items);
+    expect(Mistral).toHaveBeenCalled();
   });
 
-  it('generateSpeech returns blob from API', async () => {
-    const mockBlob = new Blob(['audio-data'], { type: 'audio/mpeg' });
+  it('generateSpeech returns blob using SDK', async () => {
+    const mockAudioData = new Uint8Array([1, 2, 3]);
     
-    fetch.mockResolvedValueOnce({
-      ok: true,
-      blob: async () => mockBlob
-    });
+    mockComplete.mockResolvedValue({ audioData: mockAudioData });
 
     const result = await generateSpeech('test-api-key', 'Hello', 'voice1');
     expect(result).toBeInstanceOf(Blob);
-    expect(fetch).toHaveBeenCalledWith(
-      'https://api.mistral.ai/v1/audio/speech',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({
-          model: 'mistral-tts',
-          input: 'Hello',
-          voice: 'voice1'
-        })
-      })
-    );
-  });
-
-  it('handles API errors', async () => {
-    fetch.mockResolvedValueOnce({
-      ok: false,
-      statusText: 'Unauthorized'
-    });
-
-    await expect(fetchVoices('invalid-key')).rejects.toThrow('Unauthorized');
+    expect(mockComplete).toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const Settings = ({ voices }) => {
+const Settings = ({ voices, onSettingsChange }) => {
   const [apiKey, setApiKey] = useState(localStorage.getItem('mistral_api_key') || '');
   const [voiceId, setVoiceId] = useState(localStorage.getItem('mistral_voice_id') || '');
 
@@ -8,12 +8,14 @@ const Settings = ({ voices }) => {
     const value = e.target.value;
     setApiKey(value);
     localStorage.setItem('mistral_api_key', value);
+    if (onSettingsChange) onSettingsChange();
   };
 
   const handleVoiceChange = (e) => {
     const value = e.target.value;
     setVoiceId(value);
     localStorage.setItem('mistral_voice_id', value);
+    if (onSettingsChange) onSettingsChange();
   };
 
   return (

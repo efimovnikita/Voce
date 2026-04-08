@@ -1,0 +1,20 @@
+import { Mistral } from "@mistralai/mistralai";
+
+const client = new Mistral({ apiKey: "your-api-key" });
+
+const result = await client.audio.voices.list({ limit: 10, offset: 0 });
+
+console.log(`Total voices: ${result.total}`);
+for (const voice of result.items ?? []) {
+  console.log(`  - ${voice.name} (${voice.id})  languages=${voice.languages}`);
+}
+
+// Paginate through all voices
+let offset = 0;
+const allVoices = [];
+while (true) {
+  const page = await client.audio.voices.list({ limit: 10, offset });
+  allVoices.push(...(page.items ?? []));
+  if (offset + (page.items?.length ?? 0) >= page.total) break;
+  offset += page.items?.length ?? 0;
+}

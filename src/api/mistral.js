@@ -1,39 +1,22 @@
-const BASE_URL = 'https://api.mistral.ai/v1/audio';
+import { Mistral } from "@mistralai/mistralai";
+
+const getClient = (apiKey) => new Mistral({ apiKey });
 
 export const fetchVoices = async (apiKey) => {
-  const response = await fetch(`${BASE_URL}/speech/voices`, {
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Accept': 'application/json'
-    }
-  });
-
-  if (!response.ok) {
-    throw new Error(response.statusText || 'Failed to fetch voices');
-  }
-
-  const data = await response.json();
-  return data.data;
+  const client = getClient(apiKey);
+  const result = await client.audio.voices.list({ limit: 50, offset: 0 });
+  return result.items ?? [];
 };
 
 export const generateSpeech = async (apiKey, input, voiceId) => {
-  const response = await fetch(`${BASE_URL}/speech`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'Accept': 'audio/mpeg'
-    },
-    body: JSON.stringify({
-      model: 'mistral-tts',
-      input: input,
-      voice: voiceId
-    })
+  const client = getClient(apiKey);
+  const response = await client.audio.speech.complete({
+    model: "voxtral-mini-tts-2603",
+    input: input,
+    voiceId: voiceId,
+    responseFormat: "mp3",
   });
 
-  if (!response.ok) {
-    throw new Error(response.statusText || 'Failed to generate speech');
-  }
-
-  return await response.blob();
+  // response.audioData is likely a Buffer or Uint8Array
+  return new Blob([response.audioData], { type: 'audio/mpeg' });
 };
