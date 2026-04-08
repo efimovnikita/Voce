@@ -1,7 +1,7 @@
 # Implementation Plan: Mistral Speaker MVP
 
 ## Phase 1: Project Initialization & PWA Setup
-- [ ] Task: Initialize React project with Vite and Tailwind CSS
+- [~] Task: Initialize React project with Vite and Tailwind CSS
     - [ ] Write Tests: Verify project structure and basic dependencies
     - [ ] Implement: Run `npm create vite@latest`, install Tailwind
 - [ ] Task: Configure PWA Manifest and Service Worker
