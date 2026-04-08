@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Settings from './components/Settings'
 import Player from './components/Player'
-import { fetchVoices } from './api/mistral'
+import { fetchVoices, generateSpeech } from './api/mistral'
+import { splitIntoChunks } from './utils/chunking'
 
 function App() {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -9,6 +10,11 @@ function App() {
   const [voices, setVoices] = useState([]);
   const [status, setStatus] = useState('Ready');
   const [trigger, setTrigger] = useState(0);
+  const [sharedText, setSharedText] = useState('');
+  
+  const audioRef = useRef(new Audio());
+  const chunksRef = useRef([]);
+  const currentChunkIndexRef = useRef(0);
 
   const loadVoices = useCallback(async () => {
     const apiKey = localStorage.getItem('mistral_api_key');
@@ -27,13 +33,76 @@ function App() {
     }
   }, []);
 
+  // Handle incoming shared text from URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const text = params.get('text') || params.get('title') || params.get('url');
+    if (text) {
+      setSharedText(text);
+      // If we have text, we might want to start playing automatically if API key exists
+    }
+  }, []);
+
   useEffect(() => {
     loadVoices();
   }, [loadVoices, trigger]);
 
-  const handlePlayPause = () => setIsPlaying(!isPlaying);
+  const playNextChunk = async () => {
+    const apiKey = localStorage.getItem('mistral_api_key');
+    const voiceId = localStorage.getItem('mistral_voice_id');
+    
+    if (!apiKey || !voiceId || currentChunkIndexRef.current >= chunksRef.current.length) {
+      setIsPlaying(false);
+      setProgress(100);
+      return;
+    }
+
+    try {
+      setStatus(`Generating audio for part ${currentChunkIndexRef.current + 1}...`);
+      const text = chunksRef.current[currentChunkIndexRef.current];
+      const audioBlob = await generateSpeech(apiKey, text, voiceId);
+      const audioUrl = URL.createObjectURL(audioBlob);
+      
+      audioRef.current.src = audioUrl;
+      audioRef.current.play();
+      setIsPlaying(true);
+      
+      const totalChunks = chunksRef.current.length;
+      setProgress(((currentChunkIndexRef.current) / totalChunks) * 100);
+      
+      audioRef.current.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        currentChunkIndexRef.current++;
+        playNextChunk();
+      };
+    } catch (error) {
+      console.error('Playback error:', error);
+      setStatus(`Playback error: ${error.message}`);
+      setIsPlaying(false);
+    }
+  };
+
+  const handlePlayPause = () => {
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      if (audioRef.current.src && !audioRef.current.ended) {
+        audioRef.current.play();
+        setIsPlaying(true);
+      } else if (sharedText) {
+        // Start from beginning or resume
+        chunksRef.current = splitIntoChunks(sharedText);
+        currentChunkIndexRef.current = 0;
+        playNextChunk();
+      }
+    }
+  };
+
   const handleRewind = () => {
-    console.log('Rewind clicked');
+    if (audioRef.current) {
+      audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 10);
+    }
   };
 
   const handleSettingsChange = () => {
@@ -54,7 +123,7 @@ function App() {
             onPlayPause={handlePlayPause}
             onRewind={handleRewind}
             progress={progress}
-            text="Mistral Speaker — это легковесное Progressive Web App (PWA), предназначенное для озвучивания текста (Text-to-Speech) с использованием Mistral AI API."
+            text={sharedText || "No text shared yet."}
           />
         </section>
 
@@ -64,7 +133,7 @@ function App() {
       </main>
 
       <footer className="text-sm text-gray-500">
-        Phase 3 Verification View
+        Mistral Speaker PWA
       </footer>
     </div>
   )
