@@ -16,7 +16,7 @@
 - [x] Task: Create Settings Screen (API Key & Voice Selection) (313e976)
     - [ ] Write Tests: Verify input field and select dropdown
     - [ ] Implement: Build Settings component with `localStorage` persistence
-- [~] Task: Create Player UI (Controls & Visuals)
+- [x] Task: Create Player UI (Controls & Visuals) (17d758a)
     - [ ] Write Tests: Verify Play/Pause and Rewind buttons
     - [ ] Implement: Build Player component with progress bar and waveform placeholder
 - [ ] Task: Conductor - User Manual Verification 'Core UI Components' (Protocol in workflow.md)
