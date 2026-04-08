@@ -1,10 +1,10 @@
 # Implementation Plan: Minimal UI Refactor (Non-TDD)
 
 ## Phase 1: Settings Refactor & Modal Integration
-- [x] Task: Create a `Modal` component (or use a simple Tailwind overlay) for settings. [619d29a]
-- [x] Task: Refactor `src/components/Settings.jsx` to function within the new Modal. [51f8155]
-- [x] Task: Add a small Icon Button (Gear icon) to the top corner of the application. [2ed075f]
-- [x] Task: Connect the Icon Button to the Modal state (Open/Close). [2ed075f]
+- [ ] Task: Create a `Modal` component (or use a simple Tailwind overlay) for settings.
+- [ ] Task: Refactor `src/components/Settings.jsx` to function within the new Modal.
+- [ ] Task: Add a small Icon Button (Gear icon) to the top corner of the application.
+- [ ] Task: Connect the Icon Button to the Modal state (Open/Close).
 - [ ] Task: Conductor - User Manual Verification 'Settings Refactor' (Protocol in workflow.md - Skipping automated tests)
 
 ## Phase 2: Player & Layout Simplification
