@@ -6,7 +6,7 @@
  * @param {number} maxChunkLength - Maximum number of characters per chunk.
  * @returns {string[]} - Array of text chunks.
  */
-export const splitIntoChunks = (text, maxChunkLength = 2000) => {
+export const splitIntoChunks = (text, maxChunkLength = 500) => {
   if (!text) return [];
 
   // Split by common sentence terminators (. ! ?)
