@@ -198,7 +198,7 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center relative overflow-hidden">
+    <div className="min-h-screen pb-[env(safe-area-inset-bottom)] bg-slate-900 flex flex-col items-center justify-center relative overflow-hidden">
 
       {/* Топ-бар */}
       <header className="absolute top-0 left-0 w-full p-6 flex justify-between items-center z-10">

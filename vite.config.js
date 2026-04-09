@@ -13,6 +13,7 @@ export default defineConfig({
         short_name: 'Voce',
         theme_color: '#0f172a', // Цвет фона slate-900
         background_color: '#0f172a', // Цвет заставки при запуске
+        display: 'standalone',
         scope: '/Voce/',
         icons: [
           {
