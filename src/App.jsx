@@ -9,6 +9,7 @@ import { splitIntoChunks } from './utils/chunking'
 
 function App() {
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [voices, setVoices] = useState([]);
   const [status, setStatus] = useState('Ready');
   const [trigger, setTrigger] = useState(0);
@@ -99,26 +100,30 @@ function App() {
     if (currentIndex >= chunksRef.current.length) {
       setIsPlaying(false);
       setStatus('Finished reading');
-      // Очищаем предзагруженные URL для освобождения памяти
       Object.values(preloadedUrlsRef.current).forEach(url => URL.revokeObjectURL(url));
       preloadedUrlsRef.current = {};
       return;
     }
 
     try {
-      setStatus(`Reading part ${currentIndex + 1} of ${chunksRef.current.length}...`);
-
       let audioUrl = preloadedUrlsRef.current[currentIndex];
 
-      // Если аудио еще не успело предзагрузиться (или это первый чанк), грузим сейчас
+      // Если аудио еще не предзагружено, показываем статус генерации и лоадер
       if (!audioUrl) {
+        setStatus(`Generating audio for part ${currentIndex + 1}...`);
+        setIsLoading(true); // Включаем спиннер
+        
         const text = chunksRef.current[currentIndex];
         const audioBlob = await generateSpeechStreaming(apiKey, text, voiceId);
         audioUrl = URL.createObjectURL(audioBlob);
+        
+        setIsLoading(false); // Выключаем спиннер после успешной загрузки
       } else {
-        // Если взяли из кэша, удаляем его оттуда
         delete preloadedUrlsRef.current[currentIndex];
       }
+
+      // Меняем статус на "Чтение" ТОЛЬКО когда аудио уже готово к воспроизведению
+      setStatus(`Reading part ${currentIndex + 1} of ${chunksRef.current.length}...`);
 
       audioRef.current.src = audioUrl;
       audioRef.current.playbackRate = playbackRate;
@@ -126,15 +131,15 @@ function App() {
       await audioRef.current.play();
       setIsPlaying(true);
 
-      // 🚀 СРАЗУ запускаем предзагрузку следующего чанка в фоне (без await)
       preloadChunk(currentIndex + 1);
 
       audioRef.current.onended = () => {
-        URL.revokeObjectURL(audioUrl); // Очищаем текущий URL
+        URL.revokeObjectURL(audioUrl);
         currentChunkIndexRef.current++;
         playNextChunk();
       };
     } catch (error) {
+      setIsLoading(false); // Не забываем выключить спиннер при ошибке
       setStatus(`Playback error: ${error.message}`);
       setIsPlaying(false);
     }
@@ -206,6 +211,7 @@ function App() {
       <main className="w-full max-w-sm px-6">
         <Player
           isPlaying={isPlaying}
+          isLoading={isLoading} // Передаем новое состояние в плеер
           onPlayPause={handlePlayPause}
           onRewind={handleRewind}
           playbackRate={playbackRate}
