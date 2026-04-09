@@ -56,8 +56,18 @@ function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const text = params.get('text') || params.get('title') || params.get('url');
+    
     if (text) {
-      setSharedText(decodeURIComponent(text));
+      let finalString = text;
+      try {
+        // Пытаемся декодировать на случай двойного URL-кодирования от ОС
+        finalString = decodeURIComponent(text);
+      } catch (e) {
+        // Если возникает ошибка (например, из-за одиночного символа %),
+        // просто используем уже декодированный URLSearchParams текст
+        finalString = text;
+      }
+      setSharedText(finalString);
     }
   }, []);
 
