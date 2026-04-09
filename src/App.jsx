@@ -22,6 +22,7 @@ function App() {
   const currentChunkIndexRef = useRef(0);
   // Новый ref для хранения предзагруженных URL
   const preloadedUrlsRef = useRef({});
+  const playbackRateRef = useRef(1);
 
   // Инициализация контроля обновлений PWA
   const {
@@ -126,8 +127,9 @@ function App() {
       setStatus(`Reading part ${currentIndex + 1} of ${chunksRef.current.length}...`);
 
       audioRef.current.src = audioUrl;
-      audioRef.current.playbackRate = playbackRate;
-
+      audioRef.current.playbackRate = playbackRateRef.current;
+      audioRef.current.defaultPlaybackRate = playbackRateRef.current;
+      
       await audioRef.current.play();
       setIsPlaying(true);
 
@@ -175,10 +177,18 @@ function App() {
 
   const handleSpeedChange = () => {
     setPlaybackRate(prevRate => {
-      const nextRate = prevRate === 1 ? 1.25 : prevRate === 1.25 ? 1.5 : 1;
+      let nextRate;
+      if (prevRate === 1) nextRate = 1.25;
+      else if (prevRate === 1.25) nextRate = 1.5;
+      else if (prevRate === 1.5) nextRate = 0.8;
+      else nextRate = 1;
+
       if (audioRef.current) {
         audioRef.current.playbackRate = nextRate;
       }
+      // Синхронизируем актуальную скорость с рефом
+      playbackRateRef.current = nextRate;
+      
       return nextRate;
     });
   };
