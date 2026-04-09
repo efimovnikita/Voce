@@ -5,7 +5,11 @@ const getClient = (apiKey) => new Mistral({ apiKey });
 export const fetchVoices = async (apiKey) => {
   const client = getClient(apiKey);
   const result = await client.audio.voices.list({ limit: 50, offset: 0 });
-  return result.items ?? [];
+  
+  const allVoices = result.items ?? [];
+  
+  // Отфильтровываем голоса: оставляем только те, у которых заполнено поле user_id или userId
+  return allVoices.filter(voice => voice.userId);
 };
 
 export const generateSpeechStreaming = async (apiKey, input, voiceId) => {
