@@ -11,8 +11,8 @@ export default defineConfig({
       manifest: {
         name: 'Voce Mistral Speaker',
         short_name: 'Voce',
-        // Эти пути тоже должны начинаться с большой буквы, если база такая
-        start_url: '/Voce/',
+        theme_color: '#0f172a', // Цвет фона slate-900
+        background_color: '#0f172a', // Цвет заставки при запуске
         scope: '/Voce/',
         icons: [
           {
