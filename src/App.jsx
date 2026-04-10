@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 // Импортируем хук для работы с обновлениями PWA
 import { useRegisterSW } from 'virtual:pwa-register/react'
+import localforage from 'localforage'
 
 import Settings from './components/Settings'
 import Player from './components/Player'
-import { fetchVoices, generateSpeechStreaming, simplifyTextParagraph } from './api/mistral'
+import { fetchVoices, generateSpeechStreaming, simplifyTextParagraph, generateTitle } from './api/mistral'
 import { splitIntoChunks, splitBySentences } from './utils/chunking'
 
 function App() {
@@ -13,7 +14,8 @@ function App() {
   const [voices, setVoices] = useState([]);
   const [status, setStatus] = useState('Ready');
   const [trigger, setTrigger] = useState(0);
-  const [sharedText, setSharedText] = useState('');
+  const [playlist, setPlaylist] = useState([]);
+  const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isSimplifyMode, setIsSimplifyMode] = useState(() => {
@@ -64,20 +66,73 @@ function App() {
     if (text) {
       let finalString = text;
       try {
-        // Пытаемся декодировать на случай двойного URL-кодирования от ОС
         finalString = decodeURIComponent(text);
       } catch (e) {
-        // Если возникает ошибка (например, из-за одиночного символа %),
-        // просто используем уже декодированный URLSearchParams текст
         finalString = text;
       }
-      setSharedText(finalString);
+  
+      // Асинхронная функция обработки нового текста
+      const processNewSharedText = async () => {
+        const newTrack = {
+          id: Date.now().toString(),
+          timestamp: Date.now(),
+          originalText: finalString,
+          title: "Generating title...", // Временный заголовок на английском
+          isTitleGenerated: false
+        };
+  
+        // Сохраняем в БД в начало списка
+        const currentList = await localforage.getItem('mistral_playlist') || [];
+        const updatedList = [newTrack, ...currentList];
+        await localforage.setItem('mistral_playlist', updatedList);
+  
+        // Обновляем UI
+        setPlaylist(updatedList);
+        setCurrentTrackIndex(0); // Переключаемся на новый трек
+        setStatus('Ready to play'); // Пользователь должен сам нажать Play
+  
+        // Запускаем фоновую генерацию заголовка
+        const apiKey = localStorage.getItem('mistral_api_key');
+        if (apiKey) {
+          try {
+            const generatedTitle = await generateTitle(apiKey, finalString);
+            
+            // Заново берем список из БД (на случай, если пользователь успел добавить еще один текст)
+            const latestList = await localforage.getItem('mistral_playlist') || [];
+            const trackIndex = latestList.findIndex(t => t.id === newTrack.id);
+            
+            if (trackIndex !== -1) {
+              latestList[trackIndex].title = generatedTitle;
+              latestList[trackIndex].isTitleGenerated = true;
+              await localforage.setItem('mistral_playlist', latestList);
+              setPlaylist(latestList); // Обновляем UI с красивым заголовком
+            }
+          } catch (error) {
+            console.error('Title generation error:', error);
+            // Можно оставить "Generating title..." или заменить на "Untitled Document" при ошибке
+          }
+        }
+      };
+  
+      processNewSharedText();
+  
+      // ОЧЕНЬ ВАЖНО: Очищаем URL, чтобы при обновлении страницы (pull-to-refresh) 
+      // текст не добавился в базу повторно!
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 
   useEffect(() => {
     loadVoices();
   }, [loadVoices, trigger]);
+  
+  useEffect(() => {
+      const loadPlaylist = async () => {
+        const savedPlaylist = await localforage.getItem('mistral_playlist') || [];
+        setPlaylist(savedPlaylist);
+      };
+      loadPlaylist();
+    }, []);
 
   // Функция для фоновой предзагрузки аудио
   const preloadChunk = async (index) => {
@@ -162,7 +217,12 @@ function App() {
   };
 
   const processAndPlay = async () => {
-    if (!sharedText) return;
+    // 1. Получаем текст текущего активного трека из накопителя
+    const currentTrack = playlist[currentTrackIndex];
+    const currentText = currentTrack?.originalText;
+
+    // Если текста нет, прерываем выполнение
+    if (!currentText) return;
 
     // Очищаем предыдущие предзагрузки перед новым текстом
     Object.values(preloadedUrlsRef.current).forEach(url => URL.revokeObjectURL(url));
@@ -179,8 +239,8 @@ function App() {
       }
 
       try {
-        // Разбиваем текст на группы по 3 предложения (цифру можно менять по вкусу)
-        const paragraphs = splitBySentences(sharedText, 5);
+        // 2. Используем currentText вместо sharedText
+        const paragraphs = splitBySentences(currentText, 5);
         let simplifiedText = '';
 
         for (let i = 0; i < paragraphs.length; i++) {
@@ -197,8 +257,8 @@ function App() {
         setStatus(`Errore di semplificazione: ${error.message}`);
       }
     } else {
-      // Оригинальное поведение
-      chunksRef.current = splitIntoChunks(sharedText);
+      // 3. Используем currentText вместо sharedText
+      chunksRef.current = splitIntoChunks(currentText);
       currentChunkIndexRef.current = 0;
       playNextChunk();
     }
@@ -210,16 +270,38 @@ function App() {
       setIsPlaying(false);
     } else {
       if (audioRef.current.src && !audioRef.current.ended && audioRef.current.readyState > 0) {
+        // Продолжаем воспроизведение с паузы
         audioRef.current.play();
         setIsPlaying(true);
-      } else if (sharedText) {
-        // Вместо старой логики вызываем новую функцию
+      } else if (playlist.length > 0 && playlist[currentTrackIndex]) {
+        // 4. Проверяем, есть ли трек в плейлисте (вместо проверки sharedText)
         processAndPlay();
       } else {
         setStatus('No text to play. Share something to this app!');
       }
     }
   };
+  
+  const handleClearHistory = async () => {
+      // Системное окно подтверждения (на всякий случай, чтобы не удалить случайно)
+      const confirmDelete = window.confirm("Are you sure you want to delete all saved texts?");
+      
+      if (confirmDelete) {
+        // 1. Удаляем из базы данных
+        await localforage.removeItem('mistral_playlist');
+        
+        // 2. Сбрасываем стейты в React
+        setPlaylist([]);
+        setCurrentTrackIndex(0);
+        
+        // 3. Останавливаем плеер, если он играл
+        if (audioRef.current) {
+          audioRef.current.pause();
+        }
+        setIsPlaying(false);
+        setStatus('History cleared');
+      }
+    };
 
   const handleRewind = () => {
     if (audioRef.current) {
@@ -267,6 +349,14 @@ function App() {
             {status}
           </p>
         </div>
+        
+        {playlist.length > 0 && (
+          <div className="absolute top-12 left-6 right-16 pointer-events-auto overflow-hidden">
+             <p className="text-xs text-slate-500 font-light truncate opacity-80">
+                {playlist[currentTrackIndex].title}
+             </p>
+          </div>
+        )}
 
         {/* Кнопка настроек: жестко привязана к правому верхнему углу */}
         <button
@@ -280,7 +370,7 @@ function App() {
         </button>
 
         {/* Слайдер: жестко зафиксирован справа, под кнопкой настроек */}
-        <div className="absolute top-16 right-6 pointer-events-auto z-20">
+        <div className="absolute top-18 right-6 pointer-events-auto z-20">
           <button
             onClick={handleModeToggle}
             className="relative flex items-center w-48 h-9 rounded-full bg-slate-800 border border-slate-700 p-1 cursor-pointer focus:outline-none shadow-inner"
@@ -298,7 +388,7 @@ function App() {
                 !isSimplifyMode ? 'text-white' : 'text-slate-400 hover:text-slate-300'
               }`}
             >
-              Originale
+              Original
             </span>
             
             {/* Текст "Simplificato" */}
@@ -307,7 +397,7 @@ function App() {
                 isSimplifyMode ? 'text-white' : 'text-slate-400 hover:text-slate-300'
               }`}
             >
-              Simplificato
+              Simplified
             </span>
           </button>
         </div>
@@ -317,26 +407,41 @@ function App() {
       <main className="w-full max-w-sm px-6">
         <Player
           isPlaying={isPlaying}
-          isLoading={isLoading} // Передаем новое состояние в плеер
+          isLoading={isLoading}
           onPlayPause={handlePlayPause}
           onRewind={handleRewind}
           playbackRate={playbackRate}
           onSpeedChange={handleSpeedChange}
+          
+          // Новые пропсы:
+          hasPrevious={currentTrackIndex > 0}
+          hasNext={currentTrackIndex < playlist.length - 1}
+          onPrevious={() => {
+            setCurrentTrackIndex(prev => prev - 1);
+            setIsPlaying(false); // Ставим на паузу при переключении
+            setStatus('Ready to play');
+          }}
+          onNext={() => {
+            setCurrentTrackIndex(prev => prev + 1);
+            setIsPlaying(false); // Ставим на паузу при переключении
+            setStatus('Ready to play');
+          }}
         />
       </main>
 
       {/* Модальное окно настроек */}
-      {isSettingsOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
-            <Settings
-              voices={voices}
-              onSettingsChange={handleSettingsChange}
-              onClose={() => setIsSettingsOpen(false)}
-            />
+        {isSettingsOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
+              <Settings
+                voices={voices}
+                onSettingsChange={handleSettingsChange}
+                onClose={() => setIsSettingsOpen(false)}
+                onClearHistory={handleClearHistory} // <-- ДОБАВЛЯЕМ ЭТУ СТРОКУ
+              />
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Модальное окно обновления PWA */}
       {needRefresh && (

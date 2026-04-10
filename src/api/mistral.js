@@ -55,11 +55,11 @@ export const simplifyTextParagraph = async (apiKey, paragraph) => {
   const client = getClient(apiKey);
   
   const response = await client.chat.complete({
-    model: "mistral-medium-latest",
+    model: "mistral-large-latest",
     messages: [
       {
         role: "system",
-        content: "Sei un assistente che semplifica il testo italiano per facilitarne l'ascolto e la comprensione. Riscrivi il seguente paragrafo utilizzando un vocabolario e una grammatica semplici (livello A2/B1), mantenendo il significato principale. Non aggiungere frasi introduttive, restituisci solo il testo semplificato."
+        content: "Simplify the following text to make it easier to read and understand (approximately level A2). CRITICAL: You must return the simplified text in the exact SAME LANGUAGE as the original text. Reply ONLY with the simplified text, without any quotes, formatting, explanations, or introductory phrases."
       },
       {
         role: "user",
@@ -69,4 +69,31 @@ export const simplifyTextParagraph = async (apiKey, paragraph) => {
   });
 
   return response.choices[0].message.content;
+};
+
+export const generateTitle = async (apiKey, text) => {
+  // Берем только начало текста, чтобы не гонять весь лонгрид
+  const excerpt = text.substring(0, 500); 
+  const prompt = `Generate a very short title (2 to 5 words) for the following text. Reply ONLY with the title, without quotes or explanations. Text: ${excerpt}`;
+
+  const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: 'mistral-small-latest', 
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3 // Низкая температура для более предсказуемого результата
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to generate title');
+  }
+
+  const data = await response.json();
+  // Убираем случайные кавычки, если модель их все-таки добавит
+  return data.choices[0].message.content.trim().replace(/^["']|["']$/g, '');
 };
