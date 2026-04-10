@@ -4,8 +4,8 @@ import { useRegisterSW } from 'virtual:pwa-register/react'
 
 import Settings from './components/Settings'
 import Player from './components/Player'
-import { fetchVoices, generateSpeechStreaming } from './api/mistral'
-import { splitIntoChunks } from './utils/chunking'
+import { fetchVoices, generateSpeechStreaming, simplifyTextParagraph } from './api/mistral'
+import { splitIntoChunks, splitBySentences } from './utils/chunking'
 
 function App() {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -16,7 +16,11 @@ function App() {
   const [sharedText, setSharedText] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
-
+  const [isSimplifyMode, setIsSimplifyMode] = useState(() => {
+      const savedMode = localStorage.getItem('mistral_simplify_mode');
+      return savedMode === 'true'; // Вернет false (оригинал) по умолчанию
+    });
+  
   const audioRef = useRef(new Audio());
   const chunksRef = useRef([]);
   const currentChunkIndexRef = useRef(0);
@@ -157,6 +161,49 @@ function App() {
     }
   };
 
+  const processAndPlay = async () => {
+    if (!sharedText) return;
+
+    // Очищаем предыдущие предзагрузки перед новым текстом
+    Object.values(preloadedUrlsRef.current).forEach(url => URL.revokeObjectURL(url));
+    preloadedUrlsRef.current = {};
+
+    if (isSimplifyMode) {
+      setIsLoading(true);
+      const apiKey = localStorage.getItem('mistral_api_key');
+      
+      if (!apiKey) {
+        setStatus('Missing API Key');
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        // Разбиваем текст на группы по 3 предложения (цифру можно менять по вкусу)
+        const paragraphs = splitBySentences(sharedText, 5);
+        let simplifiedText = '';
+
+        for (let i = 0; i < paragraphs.length; i++) {
+          setStatus(`Semplificazione paragrafo ${i + 1} di ${paragraphs.length}...`);
+          const simplified = await simplifyTextParagraph(apiKey, paragraphs[i]);
+          simplifiedText += simplified + '\n\n';
+        }
+
+        chunksRef.current = splitIntoChunks(simplifiedText);
+        currentChunkIndexRef.current = 0;
+        playNextChunk();
+      } catch (error) {
+        setIsLoading(false);
+        setStatus(`Errore di semplificazione: ${error.message}`);
+      }
+    } else {
+      // Оригинальное поведение
+      chunksRef.current = splitIntoChunks(sharedText);
+      currentChunkIndexRef.current = 0;
+      playNextChunk();
+    }
+  };
+  
   const handlePlayPause = () => {
     if (isPlaying) {
       audioRef.current.pause();
@@ -166,13 +213,8 @@ function App() {
         audioRef.current.play();
         setIsPlaying(true);
       } else if (sharedText) {
-        // Очищаем предыдущие предзагрузки перед новым текстом
-        Object.values(preloadedUrlsRef.current).forEach(url => URL.revokeObjectURL(url));
-        preloadedUrlsRef.current = {};
-
-        chunksRef.current = splitIntoChunks(sharedText);
-        currentChunkIndexRef.current = 0;
-        playNextChunk();
+        // Вместо старой логики вызываем новую функцию
+        processAndPlay();
       } else {
         setStatus('No text to play. Share something to this app!');
       }
@@ -206,26 +248,50 @@ function App() {
   const handleSettingsChange = () => {
     setTrigger(prev => prev + 1);
   };
+  
+  const handleModeToggle = () => {
+      const newMode = !isSimplifyMode;
+      setIsSimplifyMode(newMode);
+      localStorage.setItem('mistral_simplify_mode', newMode);
+    };
 
   return (
     <div className="min-h-screen pb-[env(safe-area-inset-bottom)] bg-slate-900 flex flex-col items-center justify-center relative overflow-hidden">
 
       {/* Топ-бар */}
       <header className="absolute top-0 left-0 w-full p-6 flex justify-between items-center z-10">
-        <div className="text-sm font-medium text-slate-300">
+        <div className="text-sm font-medium text-slate-300 truncate pr-4">
           <span className={status.includes('Error') || status.includes('error') ? 'text-red-400' : 'text-blue-400'}>
             {status}
           </span>
         </div>
-        <button
-          onClick={() => setIsSettingsOpen(true)}
-          className="p-2 text-slate-400 hover:text-white transition-colors focus:outline-none"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-        </button>
+        
+        {/* Контейнер для кнопок справа */}
+        <div className="flex items-center gap-3 shrink-0">
+          
+          {/* Переключатель режима */}
+          <button
+            onClick={handleModeToggle}
+            className={`px-3 py-1.5 rounded-full text-xs font-semibold tracking-wide uppercase transition-all ${
+              isSimplifyMode
+                ? 'bg-blue-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.3)]'
+                : 'bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600'
+            }`}
+          >
+            {isSimplifyMode ? 'Originale' : 'Simplificato'}
+          </button>
+
+          {/* Существующая кнопка настроек */}
+          <button
+            onClick={() => setIsSettingsOpen(true)}
+            className="p-2 text-slate-400 hover:text-white transition-colors focus:outline-none"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+        </div>
       </header>
 
       <main className="w-full max-w-sm px-6">

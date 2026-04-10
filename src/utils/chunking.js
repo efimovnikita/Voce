@@ -61,3 +61,40 @@ export const splitIntoChunks = (text, maxChunkLength = 500) => {
 
   return chunks;
 };
+
+/**
+ * Разбивает текст на группы по определенному количеству предложений.
+ * Полезно для подготовки контекста перед отправкой в LLM.
+ * * @param {string} text - Исходный текст.
+ * @param {number} sentencesPerGroup - Количество предложений в одной группе.
+ * @returns {string[]} - Массив сгруппированных текстовых блоков.
+ */
+export const splitBySentences = (text, sentencesPerGroup = 3) => {
+  if (!text) return [];
+
+  // Разбиваем текст по знакам препинания, завершающим предложение
+  const sentences = text.match(/[^.!?]+[.!?]*|[^.!?]+/g) || [];
+  
+  const groups = [];
+  let currentGroup = [];
+
+  for (let sentence of sentences) {
+    sentence = sentence.trim();
+    if (!sentence) continue;
+
+    currentGroup.push(sentence);
+
+    // Если группа достигла нужного размера, объединяем и сохраняем
+    if (currentGroup.length >= sentencesPerGroup) {
+      groups.push(currentGroup.join(' '));
+      currentGroup = [];
+    }
+  }
+
+  // Не забываем добавить хвост (оставшиеся предложения)
+  if (currentGroup.length > 0) {
+    groups.push(currentGroup.join(' '));
+  }
+
+  return groups;
+};

@@ -50,3 +50,23 @@ export const generateSpeechStreaming = async (apiKey, input, voiceId) => {
 
   return new Blob([result], { type: 'audio/mpeg' });
 };
+
+export const simplifyTextParagraph = async (apiKey, paragraph) => {
+  const client = getClient(apiKey);
+  
+  const response = await client.chat.complete({
+    model: "mistral-medium-latest",
+    messages: [
+      {
+        role: "system",
+        content: "Sei un assistente che semplifica il testo italiano per facilitarne l'ascolto e la comprensione. Riscrivi il seguente paragrafo utilizzando un vocabolario e una grammatica semplici (livello A2/B1), mantenendo il significato principale. Non aggiungere frasi introduttive, restituisci solo il testo semplificato."
+      },
+      {
+        role: "user",
+        content: paragraph
+      }
+    ]
+  });
+
+  return response.choices[0].message.content;
+};
