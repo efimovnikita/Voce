@@ -259,28 +259,18 @@ function App() {
     <div className="min-h-screen pb-[env(safe-area-inset-bottom)] bg-slate-900 flex flex-col items-center justify-center relative overflow-hidden">
 
       {/* Топ-бар */}
-      <header className="absolute top-0 left-0 w-full p-6 flex justify-between items-center z-10">
-        <div className="text-sm font-medium text-slate-300 truncate pr-4">
+      <header className="absolute top-0 left-0 w-full p-6 flex justify-between items-start z-10">
+        
+        {/* Статус (с небольшим отступом сверху mt-2 для красивого выравнивания по центру иконки) */}
+        <div className="text-sm font-medium text-slate-300 truncate pr-4 mt-2">
           <span className={status.includes('Error') || status.includes('error') ? 'text-red-400' : 'text-blue-400'}>
             {status}
           </span>
         </div>
-        
-        {/* Контейнер для кнопок справа */}
-        <div className="flex items-center gap-3 shrink-0">
-          
-          {/* Переключатель режима */}
-          <button
-            onClick={handleModeToggle}
-            className={`px-3 py-1.5 rounded-full text-xs font-semibold tracking-wide uppercase transition-all ${
-              isSimplifyMode
-                ? 'bg-blue-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.3)]'
-                : 'bg-slate-800 border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600'
-            }`}
-          >
-            {isSimplifyMode ? 'Originale' : 'Simplificato'}
-          </button>
 
+        {/* Контейнер для элементов справа (выстраиваем в колонку по правому краю) */}
+        <div className="flex flex-col items-end gap-4 shrink-0">
+          
           {/* Существующая кнопка настроек */}
           <button
             onClick={() => setIsSettingsOpen(true)}
@@ -291,6 +281,38 @@ function App() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </button>
+
+          {/* Двухпозиционный переключатель-таблетка */}
+          <button
+            onClick={handleModeToggle}
+            className="relative flex items-center w-52 h-9 rounded-full bg-slate-800 border border-slate-700 p-1 cursor-pointer focus:outline-none shadow-inner"
+          >
+            {/* Анимированный ползунок фона */}
+            <div
+              className={`absolute left-1 top-1 bottom-1 w-[calc(50%-4px)] bg-blue-500 rounded-full transition-transform duration-300 ease-out shadow-[0_0_15px_rgba(59,130,246,0.3)] ${
+                isSimplifyMode ? 'translate-x-full' : 'translate-x-0'
+              }`}
+            ></div>
+
+            {/* Текст "Originale" */}
+            <span 
+              className={`relative z-10 w-1/2 text-center text-[10px] font-bold tracking-wider uppercase transition-colors duration-300 ${
+                !isSimplifyMode ? 'text-white' : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              Originale
+            </span>
+            
+            {/* Текст "Simplificato" */}
+            <span 
+              className={`relative z-10 w-1/2 text-center text-[10px] font-bold tracking-wider uppercase transition-colors duration-300 ${
+                isSimplifyMode ? 'text-white' : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              Simplificato
+            </span>
+          </button>
+
         </div>
       </header>
 
