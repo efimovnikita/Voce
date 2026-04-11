@@ -59,7 +59,7 @@ export const simplifyTextParagraph = async (apiKey, paragraph) => {
     messages: [
       {
         role: "system",
-        content: "Simplify the following text to make it easier to read and understand (approximately level A2). CRITICAL: You must return the simplified text in the exact SAME LANGUAGE as the original text. Reply ONLY with the simplified text, without any quotes, formatting, explanations, or introductory phrases."
+        content: "Simplify the following text to make it easier to read and understand (approximately level A2). CRITICAL: You must return the simplified text in the Italian language. Reply ONLY with the simplified text, without any quotes, formatting, explanations, or introductory phrases."
       },
       {
         role: "user",

@@ -163,8 +163,8 @@ function App() {
     if (!currentTrack) return;
 
     try {
-      // 1. Сначала пытаемся достать из оффлайн кэша
-      const cacheKey = `offline_audio_${currentTrack.id}_${index}`;
+      const modeStr = isSimplifyMode ? 'simplified' : 'original';
+      const cacheKey = `offline_audio_${currentTrack.id}_${modeStr}_${index}`;
       const cachedBlob = await localforage.getItem(cacheKey);
 
       if (cachedBlob) {
@@ -205,7 +205,8 @@ function App() {
         setIsLoading(true);
         
         // 1. Ищем в кэше перед воспроизведением
-        const cacheKey = `offline_audio_${currentTrack.id}_${currentIndex}`;
+        const modeStr = isSimplifyMode ? 'simplified' : 'original';
+        const cacheKey = `offline_audio_${currentTrack.id}_${modeStr}_${currentIndex}`;
         const cachedBlob = await localforage.getItem(cacheKey);
   
         if (cachedBlob) {
@@ -257,18 +258,24 @@ function App() {
   };
 
   const processAndPlay = async () => {
-    // 1. Получаем текст текущего активного трека из накопителя
     const currentTrack = playlist[currentTrackIndex];
     const currentText = currentTrack?.originalText;
-
-    // Если текста нет, прерываем выполнение
+  
     if (!currentText) return;
-
-    // Очищаем предыдущие предзагрузки перед новым текстом
+  
     Object.values(preloadedUrlsRef.current).forEach(url => URL.revokeObjectURL(url));
     preloadedUrlsRef.current = {};
-
+  
     if (isSimplifyMode) {
+      // ЕСЛИ УЖЕ ЕСТЬ СОХРАНЕННЫЙ УПРОЩЕННЫЙ ТЕКСТ (оффлайн режим)
+      if (currentTrack.simplifiedText) {
+          chunksRef.current = splitIntoChunks(currentTrack.simplifiedText);
+          currentChunkIndexRef.current = 0;
+          playNextChunk();
+          return; // Выходим, в интернет идти не нужно
+      }
+  
+      // Если текста нет - генерируем (нужен интернет)
       setIsLoading(true);
       const apiKey = localStorage.getItem('mistral_api_key');
       
@@ -277,18 +284,26 @@ function App() {
         setIsLoading(false);
         return;
       }
-
+  
       try {
-        // 2. Используем currentText вместо sharedText
         const paragraphs = splitBySentences(currentText, 5);
         let simplifiedText = '';
-
+  
         for (let i = 0; i < paragraphs.length; i++) {
           setStatus(`Semplificazione paragrafo ${i + 1} di ${paragraphs.length}...`);
           const simplified = await simplifyTextParagraph(apiKey, paragraphs[i]);
           simplifiedText += simplified + '\n\n';
         }
-
+  
+        // Сохраняем сгенерированный текст в базу
+        const currentList = await localforage.getItem('mistral_playlist') || [];
+        const trackIndex = currentList.findIndex(t => t.id === currentTrack.id);
+        if (trackIndex !== -1) {
+          currentList[trackIndex].simplifiedText = simplifiedText;
+          await localforage.setItem('mistral_playlist', currentList);
+          setPlaylist(currentList); 
+        }
+  
         chunksRef.current = splitIntoChunks(simplifiedText);
         currentChunkIndexRef.current = 0;
         playNextChunk();
@@ -297,7 +312,6 @@ function App() {
         setStatus(`Errore di semplificazione: ${error.message}`);
       }
     } else {
-      // 3. Используем currentText вместо sharedText
       chunksRef.current = splitIntoChunks(currentText);
       currentChunkIndexRef.current = 0;
       playNextChunk();
@@ -393,45 +407,76 @@ function App() {
   const handleDownloadOffline = async () => {
     const currentTrack = playlist[currentTrackIndex];
     if (!currentTrack) return;
-
+  
     const apiKey = localStorage.getItem('mistral_api_key');
     const voiceId = localStorage.getItem('mistral_voice_id');
-
+  
     if (!apiKey || !voiceId) {
       setStatus('Missing API Key or Voice in Settings');
       return;
     }
-
+  
     setIsLoading(true);
-    setStatus('Preparing to download audio...');
-    console.log('Starting download for track:', currentTrack.id);
-
+    setStatus(isSimplifyMode ? 'Preparing simplified text and audio...' : 'Preparing to download audio...');
+    
     try {
-      // Пока делаем скачивание только оригинального текста (originalText)
-      const chunks = splitIntoChunks(currentTrack.originalText);
-      
-      for (let i = 0; i < chunks.length; i++) {
-        setStatus(`Downloading part ${i + 1} of ${chunks.length}...`);
-        
-        // Используем нашу уже готовую функцию с ретраями
-        const audioBlob = await fetchAudioWithRetry(apiKey, chunks[i], voiceId);
-        
-        // Сохраняем Blob в IndexedDB с привязкой к ID трека и номеру чанка
-        const cacheKey = `offline_audio_${currentTrack.id}_${i}`;
-        await localforage.setItem(cacheKey, audioBlob);
-      }
-
-      // Отмечаем в плейлисте, что этот трек доступен оффлайн
+      let textToRead = '';
       const currentList = await localforage.getItem('mistral_playlist') || [];
       const trackIndex = currentList.findIndex(t => t.id === currentTrack.id);
       
+      if (isSimplifyMode) {
+        // === РЕЖИМ УПРОЩЕНИЯ ===
+        if (currentTrack.simplifiedText) {
+            // Если уже упрощали ранее, берем готовое
+            textToRead = currentTrack.simplifiedText;
+        } else {
+            // Если нет, генерируем упрощенный текст
+            const paragraphs = splitBySentences(currentTrack.originalText, 5);
+            let generatedSimplifiedText = '';
+            
+            for (let i = 0; i < paragraphs.length; i++) {
+              setStatus(`Simplifying part ${i + 1} of ${paragraphs.length}...`);
+              const simplified = await simplifyTextParagraph(apiKey, paragraphs[i]);
+              generatedSimplifiedText += simplified + '\n\n';
+            }
+            textToRead = generatedSimplifiedText;
+            
+            // Сохраняем упрощенный текст в базу, чтобы оффлайн-плеер знал, что читать
+            if (trackIndex !== -1) {
+              currentList[trackIndex].simplifiedText = textToRead;
+              await localforage.setItem('mistral_playlist', currentList);
+              setPlaylist(currentList);
+            }
+        }
+      } else {
+        // === ОРИГИНАЛЬНЫЙ РЕЖИМ ===
+        textToRead = currentTrack.originalText;
+      }
+  
+      // Разбиваем нужный текст на чанки
+      const chunks = splitIntoChunks(textToRead);
+      const modeStr = isSimplifyMode ? 'simplified' : 'original';
+      
+      for (let i = 0; i < chunks.length; i++) {
+        setStatus(`Downloading ${modeStr} part ${i + 1} of ${chunks.length}...`);
+        const audioBlob = await fetchAudioWithRetry(apiKey, chunks[i], voiceId);
+        
+        // Сохраняем с пометкой режима (original или simplified)
+        const cacheKey = `offline_audio_${currentTrack.id}_${modeStr}_${i}`;
+        await localforage.setItem(cacheKey, audioBlob);
+      }
+  
       if (trackIndex !== -1) {
-        currentList[trackIndex].isOfflineReady = true;
+        if (isSimplifyMode) {
+            currentList[trackIndex].isOfflineSimplifiedReady = true;
+        } else {
+            currentList[trackIndex].isOfflineReady = true;
+        }
         await localforage.setItem('mistral_playlist', currentList);
         setPlaylist(currentList);
       }
-
-      setStatus('Download complete! Ready for offline.');
+  
+      setStatus(`Download complete (${modeStr})!`);
     } catch (error) {
       console.error('Download error:', error);
       setStatus(`Download error: ${error.message}`);
@@ -533,17 +578,32 @@ function App() {
           playbackRate={playbackRate}
           onSpeedChange={handleSpeedChange}
           
-          // Новые пропсы:
           hasPrevious={currentTrackIndex > 0}
           hasNext={currentTrackIndex < playlist.length - 1}
           onPrevious={() => {
             setCurrentTrackIndex(prev => prev - 1);
-            setIsPlaying(false); // Ставим на паузу при переключении
+            
+            // Принудительно сбрасываем старый аудио-источник
+            if (audioRef.current) {
+              audioRef.current.pause();
+              audioRef.current.removeAttribute('src');
+              audioRef.current.load();
+            }
+            
+            setIsPlaying(false);
             setStatus('Ready to play');
           }}
           onNext={() => {
             setCurrentTrackIndex(prev => prev + 1);
-            setIsPlaying(false); // Ставим на паузу при переключении
+            
+            // Принудительно сбрасываем старый аудио-источник
+            if (audioRef.current) {
+              audioRef.current.pause();
+              audioRef.current.removeAttribute('src');
+              audioRef.current.load();
+            }
+            
+            setIsPlaying(false);
             setStatus('Ready to play');
           }}
         />
