@@ -157,87 +157,104 @@ function App() {
 
   // Функция для фоновой предзагрузки аудио
   const preloadChunk = async (index) => {
-    // Если индекс выходит за пределы, или чанк уже предзагружен — ничего не делаем
     if (index >= chunksRef.current.length || preloadedUrlsRef.current[index]) return;
 
-    const apiKey = localStorage.getItem('mistral_api_key');
-    const voiceId = localStorage.getItem('mistral_voice_id');
-
-    if (!apiKey || !voiceId) return;
+    const currentTrack = playlist[currentTrackIndex];
+    if (!currentTrack) return;
 
     try {
+      // 1. Сначала пытаемся достать из оффлайн кэша
+      const cacheKey = `offline_audio_${currentTrack.id}_${index}`;
+      const cachedBlob = await localforage.getItem(cacheKey);
+
+      if (cachedBlob) {
+        preloadedUrlsRef.current[index] = URL.createObjectURL(cachedBlob);
+        console.log(`[Оффлайн] Чанк ${index} предзагружен из памяти`);
+        return; // Если нашли в кэше, в сеть не идем!
+      }
+
+      // 2. Если в кэше нет — качаем из сети (оригинальная логика)
+      const apiKey = localStorage.getItem('mistral_api_key');
+      const voiceId = localStorage.getItem('mistral_voice_id');
+      if (!apiKey || !voiceId) return;
+
       const text = chunksRef.current[index];
-      // ИСПОЛЬЗУЕМ ФУНКЦИЮ С ПОВТОРАМИ ВМЕСТО generateSpeechStreaming
       const audioBlob = await fetchAudioWithRetry(apiKey, text, voiceId);
-      const audioUrl = URL.createObjectURL(audioBlob);
-      // Сохраняем ссылку на готовое аудио в ref
-      preloadedUrlsRef.current[index] = audioUrl;
+      preloadedUrlsRef.current[index] = URL.createObjectURL(audioBlob);
     } catch (error) {
-      console.error(`Failed to preload chunk ${index} after retries:`, error);
+      console.error(`Failed to preload chunk ${index}:`, error);
     }
   };
 
   const playNextChunk = async () => {
-      const apiKey = localStorage.getItem('mistral_api_key');
-      const voiceId = localStorage.getItem('mistral_voice_id');
+    const currentIndex = currentChunkIndexRef.current;
+    const currentTrack = playlist[currentTrackIndex];
   
-      if (!apiKey || !voiceId) {
-        setStatus(!apiKey ? 'Missing API Key' : 'Please select a voice in Settings');
-        setIsPlaying(false);
-        return;
-      }
+    if (currentIndex >= chunksRef.current.length) {
+      setIsPlaying(false);
+      setStatus('Finished reading');
+      Object.values(preloadedUrlsRef.current).forEach(url => URL.revokeObjectURL(url));
+      preloadedUrlsRef.current = {};
+      return;
+    }
   
-      const currentIndex = currentChunkIndexRef.current;
+    try {
+      let audioUrl = preloadedUrlsRef.current[currentIndex];
   
-      if (currentIndex >= chunksRef.current.length) {
-        setIsPlaying(false);
-        setStatus('Finished reading');
-        Object.values(preloadedUrlsRef.current).forEach(url => URL.revokeObjectURL(url));
-        preloadedUrlsRef.current = {};
-        return;
-      }
+      if (!audioUrl) {
+        setIsLoading(true);
+        
+        // 1. Ищем в кэше перед воспроизведением
+        const cacheKey = `offline_audio_${currentTrack.id}_${currentIndex}`;
+        const cachedBlob = await localforage.getItem(cacheKey);
   
-      try {
-        let audioUrl = preloadedUrlsRef.current[currentIndex];
+        if (cachedBlob) {
+          audioUrl = URL.createObjectURL(cachedBlob);
+          console.log(`[Оффлайн] Воспроизведение чанка ${currentIndex} из памяти`);
+        } else {
+          // 2. Если в кэше нет - нужен интернет и ключи API
+          const apiKey = localStorage.getItem('mistral_api_key');
+          const voiceId = localStorage.getItem('mistral_voice_id');
   
-        // Если аудио еще не предзагружено, показываем статус генерации и лоадер
-        if (!audioUrl) {
+          if (!apiKey || !voiceId) {
+            setStatus(!apiKey ? 'Missing API Key' : 'Please select a voice in Settings');
+            setIsPlaying(false);
+            setIsLoading(false);
+            return;
+          }
+  
           setStatus(`Generating audio for part ${currentIndex + 1}...`);
-          setIsLoading(true); // Включаем спиннер
-          
           const text = chunksRef.current[currentIndex];
-          // ИСПОЛЬЗУЕМ ФУНКЦИЮ С ПОВТОРАМИ ВМЕСТО generateSpeechStreaming
           const audioBlob = await fetchAudioWithRetry(apiKey, text, voiceId);
           audioUrl = URL.createObjectURL(audioBlob);
-          
-          setIsLoading(false); // Выключаем спиннер после успешной загрузки
-        } else {
-          delete preloadedUrlsRef.current[currentIndex];
         }
-  
-        // Меняем статус на "Чтение" ТОЛЬКО когда аудио уже готово к воспроизведению
-        setStatus(`Reading part ${currentIndex + 1} of ${chunksRef.current.length}...`);
-  
-        audioRef.current.src = audioUrl;
-        audioRef.current.playbackRate = playbackRateRef.current;
-        audioRef.current.defaultPlaybackRate = playbackRateRef.current;
-        
-        await audioRef.current.play();
-        setIsPlaying(true);
-  
-        preloadChunk(currentIndex + 1);
-  
-        audioRef.current.onended = () => {
-          URL.revokeObjectURL(audioUrl);
-          currentChunkIndexRef.current++;
-          playNextChunk();
-        };
-      } catch (error) {
-        setIsLoading(false); // Не забываем выключить спиннер при ошибке
-        setStatus(`Playback error: ${error.message}`);
-        setIsPlaying(false);
+        setIsLoading(false);
+      } else {
+        delete preloadedUrlsRef.current[currentIndex];
       }
-    };
+  
+      setStatus(`Reading part ${currentIndex + 1} of ${chunksRef.current.length}...`);
+  
+      audioRef.current.src = audioUrl;
+      audioRef.current.playbackRate = playbackRateRef.current;
+      audioRef.current.defaultPlaybackRate = playbackRateRef.current;
+      
+      await audioRef.current.play();
+      setIsPlaying(true);
+  
+      preloadChunk(currentIndex + 1);
+  
+      audioRef.current.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        currentChunkIndexRef.current++;
+        playNextChunk();
+      };
+    } catch (error) {
+      setIsLoading(false);
+      setStatus(`Playback error: ${error.message}`);
+      setIsPlaying(false);
+    }
+  };
 
   const processAndPlay = async () => {
     // 1. Получаем текст текущего активного трека из накопителя
@@ -306,25 +323,44 @@ function App() {
   };
   
   const handleClearHistory = async () => {
-      // Системное окно подтверждения (на всякий случай, чтобы не удалить случайно)
-      const confirmDelete = window.confirm("Are you sure you want to delete all saved texts?");
+    // Обновили текст подтверждения, чтобы было понятно, что удаляется и аудио
+    const confirmDelete = window.confirm("Are you sure you want to delete all saved texts and offline audio?");
+    
+    if (confirmDelete) {
+      setIsLoading(true);
+      setStatus('Clearing history and audio files...');
       
-      if (confirmDelete) {
-        // 1. Удаляем из базы данных
+      try {
+        // 1. Проходим по всей базе и удаляем все скачанные аудио чанки
+        const keys = await localforage.keys();
+        const audioKeys = keys.filter(key => key.startsWith('offline_audio_'));
+        
+        for (const key of audioKeys) {
+          await localforage.removeItem(key);
+        }
+        console.log(`Deleted ${audioKeys.length} offline audio chunks.`);
+
+        // 2. Удаляем сам плейлист из базы
         await localforage.removeItem('mistral_playlist');
         
-        // 2. Сбрасываем стейты в React
+        // 3. Сбрасываем стейты в React
         setPlaylist([]);
         setCurrentTrackIndex(0);
         
-        // 3. Останавливаем плеер, если он играл
+        // 4. Останавливаем плеер, если он играл
         if (audioRef.current) {
           audioRef.current.pause();
         }
         setIsPlaying(false);
-        setStatus('History cleared');
+        setStatus('History and offline audio cleared');
+      } catch (error) {
+        console.error('Error clearing history:', error);
+        setStatus('Error clearing history');
+      } finally {
+        setIsLoading(false);
       }
-    };
+    }
+  };
 
   const handleRewind = () => {
     if (audioRef.current) {
@@ -354,6 +390,56 @@ function App() {
     setTrigger(prev => prev + 1);
   };
   
+  const handleDownloadOffline = async () => {
+    const currentTrack = playlist[currentTrackIndex];
+    if (!currentTrack) return;
+
+    const apiKey = localStorage.getItem('mistral_api_key');
+    const voiceId = localStorage.getItem('mistral_voice_id');
+
+    if (!apiKey || !voiceId) {
+      setStatus('Missing API Key or Voice in Settings');
+      return;
+    }
+
+    setIsLoading(true);
+    setStatus('Preparing to download audio...');
+    console.log('Starting download for track:', currentTrack.id);
+
+    try {
+      // Пока делаем скачивание только оригинального текста (originalText)
+      const chunks = splitIntoChunks(currentTrack.originalText);
+      
+      for (let i = 0; i < chunks.length; i++) {
+        setStatus(`Downloading part ${i + 1} of ${chunks.length}...`);
+        
+        // Используем нашу уже готовую функцию с ретраями
+        const audioBlob = await fetchAudioWithRetry(apiKey, chunks[i], voiceId);
+        
+        // Сохраняем Blob в IndexedDB с привязкой к ID трека и номеру чанка
+        const cacheKey = `offline_audio_${currentTrack.id}_${i}`;
+        await localforage.setItem(cacheKey, audioBlob);
+      }
+
+      // Отмечаем в плейлисте, что этот трек доступен оффлайн
+      const currentList = await localforage.getItem('mistral_playlist') || [];
+      const trackIndex = currentList.findIndex(t => t.id === currentTrack.id);
+      
+      if (trackIndex !== -1) {
+        currentList[trackIndex].isOfflineReady = true;
+        await localforage.setItem('mistral_playlist', currentList);
+        setPlaylist(currentList);
+      }
+
+      setStatus('Download complete! Ready for offline.');
+    } catch (error) {
+      console.error('Download error:', error);
+      setStatus(`Download error: ${error.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
   const handleModeToggle = () => {
       const newMode = !isSimplifyMode;
       setIsSimplifyMode(newMode);
@@ -374,10 +460,21 @@ function App() {
         </div>
         
         {playlist.length > 0 && (
-          <div className="absolute top-12 left-6 right-16 pointer-events-auto overflow-hidden">
-             <p className="text-xs text-slate-500 font-light truncate opacity-80">
+          <div className="absolute top-12 left-6 right-16 pointer-events-auto overflow-hidden flex items-center space-x-2">
+              <p className="text-xs text-slate-500 font-light truncate opacity-80 max-w-[80%]">
                 {playlist[currentTrackIndex].title}
-             </p>
+              </p>
+              
+              {/* Кнопка скачивания для оффлайн */}
+              <button 
+                onClick={handleDownloadOffline}
+                className="text-slate-500 hover:text-blue-400 transition-colors focus:outline-none p-1"
+                title="Скачать аудио для оффлайн"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+              </button>
           </div>
         )}
 
