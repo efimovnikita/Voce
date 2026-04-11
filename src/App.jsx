@@ -133,6 +133,27 @@ function App() {
       };
       loadPlaylist();
     }, []);
+  
+  // Функция-обертка для загрузки аудио с механизмом повторных попыток
+  const fetchAudioWithRetry = async (apiKey, text, voiceId, maxRetries = 5) => {
+    let attempt = 0;
+    while (attempt < maxRetries) {
+      try {
+        return await generateSpeechStreaming(apiKey, text, voiceId);
+      } catch (error) {
+        attempt++;
+        console.warn(`[Audio Fetch] Ошибка загрузки чанка (попытка ${attempt}/${maxRetries}):`, error);
+        
+        if (attempt >= maxRetries) {
+          throw new Error(`Не удалось загрузить часть аудио после ${maxRetries} попыток.`);
+        }
+        
+        // Задержка перед следующей попыткой: 1 сек, 2 сек, 3 сек...
+        // Это помогает при временных проблемах с сетью или лимитах API
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      }
+    }
+  };
 
   // Функция для фоновой предзагрузки аудио
   const preloadChunk = async (index) => {
@@ -146,75 +167,77 @@ function App() {
 
     try {
       const text = chunksRef.current[index];
-      const audioBlob = await generateSpeechStreaming(apiKey, text, voiceId);
+      // ИСПОЛЬЗУЕМ ФУНКЦИЮ С ПОВТОРАМИ ВМЕСТО generateSpeechStreaming
+      const audioBlob = await fetchAudioWithRetry(apiKey, text, voiceId);
       const audioUrl = URL.createObjectURL(audioBlob);
       // Сохраняем ссылку на готовое аудио в ref
       preloadedUrlsRef.current[index] = audioUrl;
     } catch (error) {
-      console.error(`Failed to preload chunk ${index}:`, error);
+      console.error(`Failed to preload chunk ${index} after retries:`, error);
     }
   };
 
   const playNextChunk = async () => {
-    const apiKey = localStorage.getItem('mistral_api_key');
-    const voiceId = localStorage.getItem('mistral_voice_id');
-
-    if (!apiKey || !voiceId) {
-      setStatus(!apiKey ? 'Missing API Key' : 'Please select a voice in Settings');
-      setIsPlaying(false);
-      return;
-    }
-
-    const currentIndex = currentChunkIndexRef.current;
-
-    if (currentIndex >= chunksRef.current.length) {
-      setIsPlaying(false);
-      setStatus('Finished reading');
-      Object.values(preloadedUrlsRef.current).forEach(url => URL.revokeObjectURL(url));
-      preloadedUrlsRef.current = {};
-      return;
-    }
-
-    try {
-      let audioUrl = preloadedUrlsRef.current[currentIndex];
-
-      // Если аудио еще не предзагружено, показываем статус генерации и лоадер
-      if (!audioUrl) {
-        setStatus(`Generating audio for part ${currentIndex + 1}...`);
-        setIsLoading(true); // Включаем спиннер
-        
-        const text = chunksRef.current[currentIndex];
-        const audioBlob = await generateSpeechStreaming(apiKey, text, voiceId);
-        audioUrl = URL.createObjectURL(audioBlob);
-        
-        setIsLoading(false); // Выключаем спиннер после успешной загрузки
-      } else {
-        delete preloadedUrlsRef.current[currentIndex];
+      const apiKey = localStorage.getItem('mistral_api_key');
+      const voiceId = localStorage.getItem('mistral_voice_id');
+  
+      if (!apiKey || !voiceId) {
+        setStatus(!apiKey ? 'Missing API Key' : 'Please select a voice in Settings');
+        setIsPlaying(false);
+        return;
       }
-
-      // Меняем статус на "Чтение" ТОЛЬКО когда аудио уже готово к воспроизведению
-      setStatus(`Reading part ${currentIndex + 1} of ${chunksRef.current.length}...`);
-
-      audioRef.current.src = audioUrl;
-      audioRef.current.playbackRate = playbackRateRef.current;
-      audioRef.current.defaultPlaybackRate = playbackRateRef.current;
-      
-      await audioRef.current.play();
-      setIsPlaying(true);
-
-      preloadChunk(currentIndex + 1);
-
-      audioRef.current.onended = () => {
-        URL.revokeObjectURL(audioUrl);
-        currentChunkIndexRef.current++;
-        playNextChunk();
-      };
-    } catch (error) {
-      setIsLoading(false); // Не забываем выключить спиннер при ошибке
-      setStatus(`Playback error: ${error.message}`);
-      setIsPlaying(false);
-    }
-  };
+  
+      const currentIndex = currentChunkIndexRef.current;
+  
+      if (currentIndex >= chunksRef.current.length) {
+        setIsPlaying(false);
+        setStatus('Finished reading');
+        Object.values(preloadedUrlsRef.current).forEach(url => URL.revokeObjectURL(url));
+        preloadedUrlsRef.current = {};
+        return;
+      }
+  
+      try {
+        let audioUrl = preloadedUrlsRef.current[currentIndex];
+  
+        // Если аудио еще не предзагружено, показываем статус генерации и лоадер
+        if (!audioUrl) {
+          setStatus(`Generating audio for part ${currentIndex + 1}...`);
+          setIsLoading(true); // Включаем спиннер
+          
+          const text = chunksRef.current[currentIndex];
+          // ИСПОЛЬЗУЕМ ФУНКЦИЮ С ПОВТОРАМИ ВМЕСТО generateSpeechStreaming
+          const audioBlob = await fetchAudioWithRetry(apiKey, text, voiceId);
+          audioUrl = URL.createObjectURL(audioBlob);
+          
+          setIsLoading(false); // Выключаем спиннер после успешной загрузки
+        } else {
+          delete preloadedUrlsRef.current[currentIndex];
+        }
+  
+        // Меняем статус на "Чтение" ТОЛЬКО когда аудио уже готово к воспроизведению
+        setStatus(`Reading part ${currentIndex + 1} of ${chunksRef.current.length}...`);
+  
+        audioRef.current.src = audioUrl;
+        audioRef.current.playbackRate = playbackRateRef.current;
+        audioRef.current.defaultPlaybackRate = playbackRateRef.current;
+        
+        await audioRef.current.play();
+        setIsPlaying(true);
+  
+        preloadChunk(currentIndex + 1);
+  
+        audioRef.current.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          currentChunkIndexRef.current++;
+          playNextChunk();
+        };
+      } catch (error) {
+        setIsLoading(false); // Не забываем выключить спиннер при ошибке
+        setStatus(`Playback error: ${error.message}`);
+        setIsPlaying(false);
+      }
+    };
 
   const processAndPlay = async () => {
     // 1. Получаем текст текущего активного трека из накопителя
