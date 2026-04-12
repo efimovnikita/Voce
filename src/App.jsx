@@ -593,22 +593,28 @@ function App() {
               }`}
             ></div>
 
-            {/* Текст "Originale" */}
+            {/* Текст "Original" с индикатором */}
             <span
-              className={`relative z-10 w-1/2 text-center text-[10px] font-bold tracking-wider uppercase transition-colors duration-300 ${
+              className={`relative z-10 w-1/2 flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-wider uppercase transition-colors duration-300 ${
                 !isSimplifyMode ? 'text-white' : 'text-slate-400 hover:text-slate-300'
               }`}
             >
               Original
+              {playlist[currentTrackIndex]?.isOfflineReady && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]"></span>
+              )}
             </span>
 
-            {/* Текст "Simplificato" */}
+            {/* Текст "Simplified" с индикатором */}
             <span
-              className={`relative z-10 w-1/2 text-center text-[10px] font-bold tracking-wider uppercase transition-colors duration-300 ${
+              className={`relative z-10 w-1/2 flex items-center justify-center gap-1.5 text-[10px] font-bold tracking-wider uppercase transition-colors duration-300 ${
                 isSimplifyMode ? 'text-white' : 'text-slate-400 hover:text-slate-300'
               }`}
             >
               Simplified
+              {playlist[currentTrackIndex]?.isOfflineSimplifiedReady && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]"></span>
+              )}
             </span>
           </button>
         </div>
