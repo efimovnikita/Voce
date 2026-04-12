@@ -55,7 +55,7 @@ export const simplifyTextParagraph = async (apiKey, paragraph) => {
   const client = getClient(apiKey);
   
   const response = await client.chat.complete({
-    model: "mistral-large-latest",
+    model: "mistral-medium-latest",
     messages: [
       {
         role: "system",
