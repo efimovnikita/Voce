@@ -1,20 +1,29 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 
-const Player = ({ 
-  isPlaying, 
-  isLoading, 
-  onPlayPause, 
-  onRewind, 
-  playbackRate, 
+const Player = ({
+  isPlaying,
+  isLoading,
+  onPlayPause,
+  onRewind,
+  playbackRate,
   onSpeedChange,
   onPrevious,
   onNext,
   hasPrevious,
   hasNext
 }) => {
+
+  // Запоминаем случайные значения один раз при загрузке компонента
+  const eqBars = useMemo(() => {
+    return [...Array(16)].map(() => ({
+      duration: 0.8 + Math.random() * 0.5,
+      delay: Math.random() * -2
+    }));
+  }, []);
+
   return (
     <div className="flex flex-col items-center w-full space-y-10">
-      
+
       {/* Декоративная гистограмма */}
       <div className="flex items-center justify-center w-full h-24 space-x-1.5">
         <style>
@@ -26,25 +35,23 @@ const Player = ({
             }
           `}
         </style>
-        {[...Array(16)].map((_, i) => {
-          const duration = 0.8 + Math.random() * 0.5;
-          const delay = Math.random() * -2;
-          
-          return (
-            <div 
-              key={i}
-              className={`w-2 rounded-full transition-all duration-500 ${(!isPlaying || isLoading) ? 'bg-slate-800 h-2 opacity-50' : 'bg-blue-500 opacity-100'}`}
-              style={{ 
-                animation: (isPlaying && !isLoading) ? `smoothEq ${duration}s ease-in-out ${delay}s infinite alternate` : 'none',
-              }}
-            />
-          );
-        })}
+        {/* Используем наш сохраненный массив eqBars вместо [...Array(16)] */}
+        {eqBars.map((bar, i) => (
+          <div
+            key={i}
+            className={`w-2 rounded-full transition-all duration-500 ${(!isPlaying || isLoading) ? 'bg-slate-800 h-2 opacity-50' : 'bg-blue-500 opacity-100'}`}
+            style={{
+              animation: (isPlaying && !isLoading)
+                ? `smoothEq ${bar.duration}s ease-in-out ${bar.delay}s infinite alternate`
+                : 'none',
+            }}
+          />
+        ))}
       </div>
 
       {/* Кнопки управления */}
       <div className="flex items-center justify-center space-x-4 sm:space-x-6 w-full mt-4">
-        
+
         {/* Перемотка на 10 сек */}
         <button
           onClick={onRewind}
@@ -76,10 +83,10 @@ const Player = ({
           aria-label={isLoading ? 'Loading' : (isPlaying ? 'Pause' : 'Play')}
           className={`
             relative flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full focus:outline-none transition-all duration-500 shrink-0
-            ${isLoading 
-              ? 'bg-slate-800 border border-slate-700 cursor-wait' 
-              : isPlaying 
-                ? 'bg-slate-800 text-blue-400 border border-blue-500/30 shadow-[0_0_20px_rgba(59,130,246,0.2)]' 
+            ${isLoading
+              ? 'bg-slate-800 border border-slate-700 cursor-wait'
+              : isPlaying
+                ? 'bg-slate-800 text-blue-400 border border-blue-500/30 shadow-[0_0_20px_rgba(59,130,246,0.2)]'
                 : 'bg-gradient-to-tr from-blue-600 to-blue-400 text-white shadow-lg shadow-blue-500/40 hover:shadow-blue-500/60 hover:scale-105'
             }
           `}
@@ -121,7 +128,7 @@ const Player = ({
         >
           {playbackRate}x
         </button>
-        
+
       </div>
     </div>
   );

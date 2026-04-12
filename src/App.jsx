@@ -22,7 +22,8 @@ function App() {
       const savedMode = localStorage.getItem('mistral_simplify_mode');
       return savedMode === 'true'; // Вернет false (оригинал) по умолчанию
     });
-  
+  const [dailyListeningTime, setDailyListeningTime] = useState(0);
+
   const audioRef = useRef(new Audio());
   const chunksRef = useRef([]);
   const currentChunkIndexRef = useRef(0);
@@ -43,6 +44,51 @@ function App() {
     },
   });
 
+  // Загрузка времени или сброс при наступлении нового дня
+  useEffect(() => {
+    const today = new Date().toLocaleDateString();
+    const savedDate = localStorage.getItem('voce_listening_date');
+    const savedTime = localStorage.getItem('voce_listening_time');
+
+    if (savedDate === today) {
+      setDailyListeningTime(parseInt(savedTime || '0', 10));
+    } else {
+      // Наступил новый день (или первый запуск)
+      localStorage.setItem('voce_listening_date', today);
+      localStorage.setItem('voce_listening_time', '0');
+      setDailyListeningTime(0);
+    }
+  }, []);
+
+  // Сам таймер
+  useEffect(() => {
+    let interval;
+    // Считаем время только когда реально идет воспроизведение
+    if (isPlaying && !isLoading) {
+      interval = setInterval(() => {
+        setDailyListeningTime(prev => {
+          const newTime = prev + 1;
+          // Сохраняем каждую секунду, чтобы не потерять прогресс при перезагрузке страницы
+          localStorage.setItem('voce_listening_time', newTime.toString());
+          return newTime;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isPlaying, isLoading]);
+
+  const formatTimeDigital = (totalSeconds) => {
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+
+    // Дополняем нулями до двух знаков (01, 02...)
+    const pad = (num) => num.toString().padStart(2, '0');
+
+    // Всегда возвращаем формат ЧЧ:ММ:СС
+    return `${pad(h)}:${pad(m)}:${pad(s)}`;
+  };
+
   const loadVoices = useCallback(async () => {
     const apiKey = localStorage.getItem('mistral_api_key');
     if (apiKey) {
@@ -62,7 +108,7 @@ function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const text = params.get('text') || params.get('title') || params.get('url');
-    
+
     if (text) {
       let finalString = text;
       try {
@@ -70,7 +116,7 @@ function App() {
       } catch (e) {
         finalString = text;
       }
-  
+
       // Асинхронная функция обработки нового текста
       const processNewSharedText = async () => {
         const newTrack = {
@@ -80,27 +126,27 @@ function App() {
           title: "Generating title...", // Временный заголовок на английском
           isTitleGenerated: false
         };
-  
+
         // Сохраняем в БД в начало списка
         const currentList = await localforage.getItem('mistral_playlist') || [];
         const updatedList = [newTrack, ...currentList];
         await localforage.setItem('mistral_playlist', updatedList);
-  
+
         // Обновляем UI
         setPlaylist(updatedList);
         setCurrentTrackIndex(0); // Переключаемся на новый трек
         setStatus('Ready to play'); // Пользователь должен сам нажать Play
-  
+
         // Запускаем фоновую генерацию заголовка
         const apiKey = localStorage.getItem('mistral_api_key');
         if (apiKey) {
           try {
             const generatedTitle = await generateTitle(apiKey, finalString);
-            
+
             // Заново берем список из БД (на случай, если пользователь успел добавить еще один текст)
             const latestList = await localforage.getItem('mistral_playlist') || [];
             const trackIndex = latestList.findIndex(t => t.id === newTrack.id);
-            
+
             if (trackIndex !== -1) {
               latestList[trackIndex].title = generatedTitle;
               latestList[trackIndex].isTitleGenerated = true;
@@ -113,10 +159,10 @@ function App() {
           }
         }
       };
-  
+
       processNewSharedText();
-  
-      // ОЧЕНЬ ВАЖНО: Очищаем URL, чтобы при обновлении страницы (pull-to-refresh) 
+
+      // ОЧЕНЬ ВАЖНО: Очищаем URL, чтобы при обновлении страницы (pull-to-refresh)
       // текст не добавился в базу повторно!
       window.history.replaceState({}, document.title, window.location.pathname);
     }
@@ -125,7 +171,7 @@ function App() {
   useEffect(() => {
     loadVoices();
   }, [loadVoices, trigger]);
-  
+
   useEffect(() => {
       const loadPlaylist = async () => {
         const savedPlaylist = await localforage.getItem('mistral_playlist') || [];
@@ -133,7 +179,7 @@ function App() {
       };
       loadPlaylist();
     }, []);
-  
+
   // Функция-обертка для загрузки аудио с механизмом повторных попыток
   const fetchAudioWithRetry = async (apiKey, text, voiceId, maxRetries = 5) => {
     let attempt = 0;
@@ -143,11 +189,11 @@ function App() {
       } catch (error) {
         attempt++;
         console.warn(`[Audio Fetch] Ошибка загрузки чанка (попытка ${attempt}/${maxRetries}):`, error);
-        
+
         if (attempt >= maxRetries) {
           throw new Error(`Не удалось загрузить часть аудио после ${maxRetries} попыток.`);
         }
-        
+
         // Задержка перед следующей попыткой: 1 сек, 2 сек, 3 сек...
         // Это помогает при временных проблемах с сетью или лимитах API
         await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
@@ -189,7 +235,7 @@ function App() {
   const playNextChunk = async () => {
     const currentIndex = currentChunkIndexRef.current;
     const currentTrack = playlist[currentTrackIndex];
-  
+
     if (currentIndex >= chunksRef.current.length) {
       setIsPlaying(false);
       setStatus('Finished reading');
@@ -197,18 +243,18 @@ function App() {
       preloadedUrlsRef.current = {};
       return;
     }
-  
+
     try {
       let audioUrl = preloadedUrlsRef.current[currentIndex];
-  
+
       if (!audioUrl) {
         setIsLoading(true);
-        
+
         // 1. Ищем в кэше перед воспроизведением
         const modeStr = isSimplifyMode ? 'simplified' : 'original';
         const cacheKey = `offline_audio_${currentTrack.id}_${modeStr}_${currentIndex}`;
         const cachedBlob = await localforage.getItem(cacheKey);
-  
+
         if (cachedBlob) {
           audioUrl = URL.createObjectURL(cachedBlob);
           console.log(`[Оффлайн] Воспроизведение чанка ${currentIndex} из памяти`);
@@ -216,14 +262,14 @@ function App() {
           // 2. Если в кэше нет - нужен интернет и ключи API
           const apiKey = localStorage.getItem('mistral_api_key');
           const voiceId = localStorage.getItem('mistral_voice_id');
-  
+
           if (!apiKey || !voiceId) {
             setStatus(!apiKey ? 'Missing API Key' : 'Please select a voice in Settings');
             setIsPlaying(false);
             setIsLoading(false);
             return;
           }
-  
+
           setStatus(`Generating audio for part ${currentIndex + 1}...`);
           const text = chunksRef.current[currentIndex];
           const audioBlob = await fetchAudioWithRetry(apiKey, text, voiceId);
@@ -233,18 +279,18 @@ function App() {
       } else {
         delete preloadedUrlsRef.current[currentIndex];
       }
-  
+
       setStatus(`Reading part ${currentIndex + 1} of ${chunksRef.current.length}...`);
-  
+
       audioRef.current.src = audioUrl;
       audioRef.current.playbackRate = playbackRateRef.current;
       audioRef.current.defaultPlaybackRate = playbackRateRef.current;
-      
+
       await audioRef.current.play();
       setIsPlaying(true);
-  
+
       preloadChunk(currentIndex + 1);
-  
+
       audioRef.current.onended = () => {
         URL.revokeObjectURL(audioUrl);
         currentChunkIndexRef.current++;
@@ -260,12 +306,12 @@ function App() {
   const processAndPlay = async () => {
     const currentTrack = playlist[currentTrackIndex];
     const currentText = currentTrack?.originalText;
-  
+
     if (!currentText) return;
-  
+
     Object.values(preloadedUrlsRef.current).forEach(url => URL.revokeObjectURL(url));
     preloadedUrlsRef.current = {};
-  
+
     if (isSimplifyMode) {
       // ЕСЛИ УЖЕ ЕСТЬ СОХРАНЕННЫЙ УПРОЩЕННЫЙ ТЕКСТ (оффлайн режим)
       if (currentTrack.simplifiedText) {
@@ -274,36 +320,36 @@ function App() {
           playNextChunk();
           return; // Выходим, в интернет идти не нужно
       }
-  
+
       // Если текста нет - генерируем (нужен интернет)
       setIsLoading(true);
       const apiKey = localStorage.getItem('mistral_api_key');
-      
+
       if (!apiKey) {
         setStatus('Missing API Key');
         setIsLoading(false);
         return;
       }
-  
+
       try {
         const paragraphs = splitBySentences(currentText, 5);
         let simplifiedText = '';
-  
+
         for (let i = 0; i < paragraphs.length; i++) {
           setStatus(`Semplificazione paragrafo ${i + 1} di ${paragraphs.length}...`);
           const simplified = await simplifyTextParagraph(apiKey, paragraphs[i]);
           simplifiedText += simplified + '\n\n';
         }
-  
+
         // Сохраняем сгенерированный текст в базу
         const currentList = await localforage.getItem('mistral_playlist') || [];
         const trackIndex = currentList.findIndex(t => t.id === currentTrack.id);
         if (trackIndex !== -1) {
           currentList[trackIndex].simplifiedText = simplifiedText;
           await localforage.setItem('mistral_playlist', currentList);
-          setPlaylist(currentList); 
+          setPlaylist(currentList);
         }
-  
+
         chunksRef.current = splitIntoChunks(simplifiedText);
         currentChunkIndexRef.current = 0;
         playNextChunk();
@@ -317,7 +363,7 @@ function App() {
       playNextChunk();
     }
   };
-  
+
   const handlePlayPause = () => {
     if (isPlaying) {
       audioRef.current.pause();
@@ -335,20 +381,20 @@ function App() {
       }
     }
   };
-  
+
   const handleClearHistory = async () => {
     // Обновили текст подтверждения, чтобы было понятно, что удаляется и аудио
     const confirmDelete = window.confirm("Are you sure you want to delete all saved texts and offline audio?");
-    
+
     if (confirmDelete) {
       setIsLoading(true);
       setStatus('Clearing history and audio files...');
-      
+
       try {
         // 1. Проходим по всей базе и удаляем все скачанные аудио чанки
         const keys = await localforage.keys();
         const audioKeys = keys.filter(key => key.startsWith('offline_audio_'));
-        
+
         for (const key of audioKeys) {
           await localforage.removeItem(key);
         }
@@ -356,11 +402,11 @@ function App() {
 
         // 2. Удаляем сам плейлист из базы
         await localforage.removeItem('mistral_playlist');
-        
+
         // 3. Сбрасываем стейты в React
         setPlaylist([]);
         setCurrentTrackIndex(0);
-        
+
         // 4. Останавливаем плеер, если он играл
         if (audioRef.current) {
           audioRef.current.pause();
@@ -395,7 +441,7 @@ function App() {
       }
       // Синхронизируем актуальную скорость с рефом
       playbackRateRef.current = nextRate;
-      
+
       return nextRate;
     });
   };
@@ -403,27 +449,27 @@ function App() {
   const handleSettingsChange = () => {
     setTrigger(prev => prev + 1);
   };
-  
+
   const handleDownloadOffline = async () => {
     const currentTrack = playlist[currentTrackIndex];
     if (!currentTrack) return;
-  
+
     const apiKey = localStorage.getItem('mistral_api_key');
     const voiceId = localStorage.getItem('mistral_voice_id');
-  
+
     if (!apiKey || !voiceId) {
       setStatus('Missing API Key or Voice in Settings');
       return;
     }
-  
+
     setIsLoading(true);
     setStatus(isSimplifyMode ? 'Preparing simplified text and audio...' : 'Preparing to download audio...');
-    
+
     try {
       let textToRead = '';
       const currentList = await localforage.getItem('mistral_playlist') || [];
       const trackIndex = currentList.findIndex(t => t.id === currentTrack.id);
-      
+
       if (isSimplifyMode) {
         // === РЕЖИМ УПРОЩЕНИЯ ===
         if (currentTrack.simplifiedText) {
@@ -433,14 +479,14 @@ function App() {
             // Если нет, генерируем упрощенный текст
             const paragraphs = splitBySentences(currentTrack.originalText, 5);
             let generatedSimplifiedText = '';
-            
+
             for (let i = 0; i < paragraphs.length; i++) {
               setStatus(`Simplifying part ${i + 1} of ${paragraphs.length}...`);
               const simplified = await simplifyTextParagraph(apiKey, paragraphs[i]);
               generatedSimplifiedText += simplified + '\n\n';
             }
             textToRead = generatedSimplifiedText;
-            
+
             // Сохраняем упрощенный текст в базу, чтобы оффлайн-плеер знал, что читать
             if (trackIndex !== -1) {
               currentList[trackIndex].simplifiedText = textToRead;
@@ -452,20 +498,20 @@ function App() {
         // === ОРИГИНАЛЬНЫЙ РЕЖИМ ===
         textToRead = currentTrack.originalText;
       }
-  
+
       // Разбиваем нужный текст на чанки
       const chunks = splitIntoChunks(textToRead);
       const modeStr = isSimplifyMode ? 'simplified' : 'original';
-      
+
       for (let i = 0; i < chunks.length; i++) {
         setStatus(`Downloading ${modeStr} part ${i + 1} of ${chunks.length}...`);
         const audioBlob = await fetchAudioWithRetry(apiKey, chunks[i], voiceId);
-        
+
         // Сохраняем с пометкой режима (original или simplified)
         const cacheKey = `offline_audio_${currentTrack.id}_${modeStr}_${i}`;
         await localforage.setItem(cacheKey, audioBlob);
       }
-  
+
       if (trackIndex !== -1) {
         if (isSimplifyMode) {
             currentList[trackIndex].isOfflineSimplifiedReady = true;
@@ -475,7 +521,7 @@ function App() {
         await localforage.setItem('mistral_playlist', currentList);
         setPlaylist(currentList);
       }
-  
+
       setStatus(`Download complete (${modeStr})!`);
     } catch (error) {
       console.error('Download error:', error);
@@ -484,7 +530,7 @@ function App() {
       setIsLoading(false);
     }
   };
-  
+
   const handleModeToggle = () => {
       const newMode = !isSimplifyMode;
       setIsSimplifyMode(newMode);
@@ -496,22 +542,22 @@ function App() {
 
       {/* Топ-бар с независимым позиционированием элементов */}
       <header className="absolute top-0 left-0 w-full h-full pointer-events-none z-10">
-        
+
         {/* Статус: прикреплен слева и сверху, занимает всю ширину экрана кроме зоны кнопки настроек */}
         <div className="absolute top-6 left-6 right-16 pointer-events-auto">
           <p className={`text-sm font-medium leading-relaxed drop-shadow-sm ${status.includes('Error') || status.includes('error') ? 'text-red-400' : 'text-blue-400'}`}>
             {status}
           </p>
         </div>
-        
+
         {playlist.length > 0 && (
           <div className="absolute top-12 left-6 right-16 pointer-events-auto overflow-hidden flex items-center space-x-2">
               <p className="text-xs text-slate-500 font-light truncate opacity-80 max-w-[80%]">
                 {playlist[currentTrackIndex].title}
               </p>
-              
+
               {/* Кнопка скачивания для оффлайн */}
-              <button 
+              <button
                 onClick={handleDownloadOffline}
                 className="text-slate-500 hover:text-blue-400 transition-colors focus:outline-none p-1"
                 title="Скачать аудио для оффлайн"
@@ -548,16 +594,16 @@ function App() {
             ></div>
 
             {/* Текст "Originale" */}
-            <span 
+            <span
               className={`relative z-10 w-1/2 text-center text-[10px] font-bold tracking-wider uppercase transition-colors duration-300 ${
                 !isSimplifyMode ? 'text-white' : 'text-slate-400 hover:text-slate-300'
               }`}
             >
               Original
             </span>
-            
+
             {/* Текст "Simplificato" */}
-            <span 
+            <span
               className={`relative z-10 w-1/2 text-center text-[10px] font-bold tracking-wider uppercase transition-colors duration-300 ${
                 isSimplifyMode ? 'text-white' : 'text-slate-400 hover:text-slate-300'
               }`}
@@ -577,36 +623,57 @@ function App() {
           onRewind={handleRewind}
           playbackRate={playbackRate}
           onSpeedChange={handleSpeedChange}
-          
+
           hasPrevious={currentTrackIndex > 0}
           hasNext={currentTrackIndex < playlist.length - 1}
           onPrevious={() => {
             setCurrentTrackIndex(prev => prev - 1);
-            
+
             // Принудительно сбрасываем старый аудио-источник
             if (audioRef.current) {
               audioRef.current.pause();
               audioRef.current.removeAttribute('src');
               audioRef.current.load();
             }
-            
+
             setIsPlaying(false);
             setStatus('Ready to play');
           }}
           onNext={() => {
             setCurrentTrackIndex(prev => prev + 1);
-            
+
             // Принудительно сбрасываем старый аудио-источник
             if (audioRef.current) {
               audioRef.current.pause();
               audioRef.current.removeAttribute('src');
               audioRef.current.load();
             }
-            
+
             setIsPlaying(false);
             setStatus('Ready to play');
           }}
         />
+
+        {/* Футер с ламповым таймером */}
+        <footer className="absolute bottom-6 left-0 w-full flex justify-center pointer-events-auto z-10 pb-[env(safe-area-inset-bottom)]">
+          <div className="flex flex-col items-center space-y-1 opacity-80 hover:opacity-100 transition-opacity duration-300">
+            <span className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-medium">
+              Tempo di ascolto
+            </span>
+            <div
+              className="px-4 py-1.5 bg-slate-900/90 border border-slate-800/50 rounded-lg shadow-inner select-none"
+              style={{
+                fontFamily: "'Courier New', Courier, monospace",
+                color: '#ff6b00',
+                textShadow: '0 0 2px #ff6b00, 0 0 8px #ff4500, 0 0 20px #ea580c'
+              }}
+            >
+              <span className="text-xl sm:text-2xl font-bold tracking-[0.1em]">
+                {formatTimeDigital(dailyListeningTime)}
+              </span>
+            </div>
+          </div>
+        </footer>
       </main>
 
       {/* Модальное окно настроек */}
