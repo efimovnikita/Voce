@@ -72,7 +72,7 @@ export const detectLanguage = async (apiKey, textExcerpt) => {
   return response.choices[0].message.content.trim();
 };
 
-export const simplifyTextParagraph = async (apiKey, paragraph, targetLanguage = "Italian") => {
+export const simplifyTextParagraph = async (apiKey, paragraph, targetLanguage = "Italian", languageLevel = "A2") => {
   const client = getClient(apiKey);
   
   const response = await client.chat.complete({
@@ -80,7 +80,7 @@ export const simplifyTextParagraph = async (apiKey, paragraph, targetLanguage = 
     messages: [
       {
         role: "system",
-        content: `Simplify the following text to make it easier to read and understand (approximately level A2). CRITICAL: You must return the simplified text in the ${targetLanguage} language. Reply ONLY with the simplified text, without any quotes, formatting, explanations, or introductory phrases.`
+        content: `Simplify the following text to make it easier to read and understand (approximately level ${languageLevel}). CRITICAL: You must return the simplified text in the ${targetLanguage} language. Reply ONLY with the simplified text, without any quotes, formatting, explanations, or introductory phrases.`
       },
       {
         role: "user",

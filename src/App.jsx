@@ -22,6 +22,9 @@ function App() {
       const savedMode = localStorage.getItem('mistral_simplify_mode');
       return savedMode === 'true'; // Вернет false (оригинал) по умолчанию
     });
+  const [languageLevel, setLanguageLevel] = useState(() => {
+      return localStorage.getItem('mistral_language_level') || 'A2';
+    });
   const [dailyListeningTime, setDailyListeningTime] = useState(0);
 
   const audioRef = useRef(new Audio());
@@ -340,8 +343,8 @@ function App() {
 
         for (let i = 0; i < paragraphs.length; i++) {
           setStatus(`Simplifying in ${detectedLanguage}: part ${i + 1} of ${paragraphs.length}...`);
-          // Передаем определенный язык в функцию
-          const simplified = await simplifyTextParagraph(apiKey, paragraphs[i], detectedLanguage);
+          // Передаем определенный язык и уровень в функцию
+          const simplified = await simplifyTextParagraph(apiKey, paragraphs[i], detectedLanguage, languageLevel);
           simplifiedText += simplified + '\n\n';
         }
 
@@ -489,7 +492,7 @@ function App() {
 
           for (let i = 0; i < paragraphs.length; i++) {
             setStatus(`Simplifying in ${detectedLanguage}: part ${i + 1} of ${paragraphs.length}...`);
-            const simplified = await simplifyTextParagraph(apiKey, paragraphs[i], detectedLanguage);
+            const simplified = await simplifyTextParagraph(apiKey, paragraphs[i], detectedLanguage, languageLevel);
             generatedSimplifiedText += simplified + '\n\n';
           }
           textToRead = generatedSimplifiedText;
@@ -696,7 +699,9 @@ function App() {
                 voices={voices}
                 onSettingsChange={handleSettingsChange}
                 onClose={() => setIsSettingsOpen(false)}
-                onClearHistory={handleClearHistory} // <-- ДОБАВЛЯЕМ ЭТУ СТРОКУ
+                onClearHistory={handleClearHistory}
+                languageLevel={languageLevel}
+                onLanguageLevelChange={setLanguageLevel}
               />
             </div>
           </div>
