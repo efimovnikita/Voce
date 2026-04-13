@@ -51,7 +51,28 @@ export const generateSpeechStreaming = async (apiKey, input, voiceId) => {
   return new Blob([result], { type: 'audio/mpeg' });
 };
 
-export const simplifyTextParagraph = async (apiKey, paragraph) => {
+export const detectLanguage = async (apiKey, textExcerpt) => {
+  const client = getClient(apiKey);
+  
+  const response = await client.chat.complete({
+    model: "mistral-small-latest",
+    messages: [
+      {
+        role: "system",
+        content: "Identify the language of the following text. Reply ONLY with the English name of the language (e.g., 'Italian', 'English', 'Russian', 'French'), without any punctuation, quotes, or explanations."
+      },
+      {
+        role: "user",
+        content: textExcerpt
+      }
+    ],
+    temperature: 0.1
+  });
+
+  return response.choices[0].message.content.trim();
+};
+
+export const simplifyTextParagraph = async (apiKey, paragraph, targetLanguage = "Italian") => {
   const client = getClient(apiKey);
   
   const response = await client.chat.complete({
@@ -59,7 +80,7 @@ export const simplifyTextParagraph = async (apiKey, paragraph) => {
     messages: [
       {
         role: "system",
-        content: "Simplify the following text to make it easier to read and understand (approximately level A2). CRITICAL: You must return the simplified text in the Italian language. Reply ONLY with the simplified text, without any quotes, formatting, explanations, or introductory phrases."
+        content: `Simplify the following text to make it easier to read and understand (approximately level A2). CRITICAL: You must return the simplified text in the ${targetLanguage} language. Reply ONLY with the simplified text, without any quotes, formatting, explanations, or introductory phrases.`
       },
       {
         role: "user",

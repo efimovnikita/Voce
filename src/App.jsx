@@ -5,7 +5,7 @@ import localforage from 'localforage'
 
 import Settings from './components/Settings'
 import Player from './components/Player'
-import { fetchVoices, generateSpeechStreaming, simplifyTextParagraph, generateTitle } from './api/mistral'
+import { fetchVoices, generateSpeechStreaming, simplifyTextParagraph, generateTitle, detectLanguage } from './api/mistral'
 import { splitIntoChunks, splitBySentences } from './utils/chunking'
 
 function App() {
@@ -313,15 +313,13 @@ function App() {
     preloadedUrlsRef.current = {};
 
     if (isSimplifyMode) {
-      // ЕСЛИ УЖЕ ЕСТЬ СОХРАНЕННЫЙ УПРОЩЕННЫЙ ТЕКСТ (оффлайн режим)
       if (currentTrack.simplifiedText) {
           chunksRef.current = splitIntoChunks(currentTrack.simplifiedText);
           currentChunkIndexRef.current = 0;
           playNextChunk();
-          return; // Выходим, в интернет идти не нужно
+          return;
       }
 
-      // Если текста нет - генерируем (нужен интернет)
       setIsLoading(true);
       const apiKey = localStorage.getItem('mistral_api_key');
 
@@ -333,15 +331,20 @@ function App() {
 
       try {
         const paragraphs = splitBySentences(currentText, 5);
+        
+        setStatus('Detecting language...');
+        const excerptForDetection = paragraphs[0] || currentText.substring(0, 500);
+        const detectedLanguage = await detectLanguage(apiKey, excerptForDetection);
+        
         let simplifiedText = '';
 
         for (let i = 0; i < paragraphs.length; i++) {
-          setStatus(`Semplificazione paragrafo ${i + 1} di ${paragraphs.length}...`);
-          const simplified = await simplifyTextParagraph(apiKey, paragraphs[i]);
+          setStatus(`Simplifying in ${detectedLanguage}: part ${i + 1} of ${paragraphs.length}...`);
+          // Передаем определенный язык в функцию
+          const simplified = await simplifyTextParagraph(apiKey, paragraphs[i], detectedLanguage);
           simplifiedText += simplified + '\n\n';
         }
 
-        // Сохраняем сгенерированный текст в базу
         const currentList = await localforage.getItem('mistral_playlist') || [];
         const trackIndex = currentList.findIndex(t => t.id === currentTrack.id);
         if (trackIndex !== -1) {
@@ -355,7 +358,7 @@ function App() {
         playNextChunk();
       } catch (error) {
         setIsLoading(false);
-        setStatus(`Errore di semplificazione: ${error.message}`);
+        setStatus(`Simplification error: ${error.message}`);
       }
     } else {
       chunksRef.current = splitIntoChunks(currentText);
@@ -476,23 +479,26 @@ function App() {
             // Если уже упрощали ранее, берем готовое
             textToRead = currentTrack.simplifiedText;
         } else {
-            // Если нет, генерируем упрощенный текст
-            const paragraphs = splitBySentences(currentTrack.originalText, 5);
-            let generatedSimplifiedText = '';
+          const paragraphs = splitBySentences(currentTrack.originalText, 5);
+                      
+          setStatus('Detecting language...');
+          const excerptForDetection = paragraphs[0] || currentTrack.originalText.substring(0, 500);
+          const detectedLanguage = await detectLanguage(apiKey, excerptForDetection);
+          
+          let generatedSimplifiedText = '';
 
-            for (let i = 0; i < paragraphs.length; i++) {
-              setStatus(`Simplifying part ${i + 1} of ${paragraphs.length}...`);
-              const simplified = await simplifyTextParagraph(apiKey, paragraphs[i]);
-              generatedSimplifiedText += simplified + '\n\n';
-            }
-            textToRead = generatedSimplifiedText;
+          for (let i = 0; i < paragraphs.length; i++) {
+            setStatus(`Simplifying in ${detectedLanguage}: part ${i + 1} of ${paragraphs.length}...`);
+            const simplified = await simplifyTextParagraph(apiKey, paragraphs[i], detectedLanguage);
+            generatedSimplifiedText += simplified + '\n\n';
+          }
+          textToRead = generatedSimplifiedText;
 
-            // Сохраняем упрощенный текст в базу, чтобы оффлайн-плеер знал, что читать
-            if (trackIndex !== -1) {
-              currentList[trackIndex].simplifiedText = textToRead;
-              await localforage.setItem('mistral_playlist', currentList);
-              setPlaylist(currentList);
-            }
+          if (trackIndex !== -1) {
+            currentList[trackIndex].simplifiedText = textToRead;
+            await localforage.setItem('mistral_playlist', currentList);
+            setPlaylist(currentList);
+          }
         }
       } else {
         // === ОРИГИНАЛЬНЫЙ РЕЖИМ ===
