@@ -6,6 +6,7 @@ import localforage from 'localforage'
 import Settings from './components/Settings'
 import Player from './components/Player'
 import { fetchVoices, generateSpeechStreaming, simplifyTextParagraph, generateTitle, detectLanguage } from './api/mistral'
+import { fetchAndParseArticle } from './api/article'
 import { splitIntoChunks, splitBySentences } from './utils/chunking'
 
 function App() {
@@ -122,12 +123,40 @@ function App() {
 
       // Асинхронная функция обработки нового текста
       const processNewSharedText = async () => {
+        let textToProcess = finalString;
+        let initialTitle = "Generating title...";
+        let isTitleGenerated = false;
+
+        // Проверка, является ли текст ссылкой
+        const isUrl = finalString.trim().startsWith('http://') || finalString.trim().startsWith('https://');
+
+        if (isUrl) {
+          const ogApiKey = localStorage.getItem('og_api_key');
+          if (!ogApiKey) {
+            setStatus('OpenGraph.io API Key missing. Please check Settings.');
+            return; // Прекращаем работу, не сохраняя ссылку как текст
+          }
+
+          try {
+            setStatus('Extracting article content...');
+            const article = await fetchAndParseArticle(finalString.trim(), ogApiKey);
+            textToProcess = article.textContent;
+            initialTitle = article.title;
+            isTitleGenerated = true;
+            setStatus('Article extracted');
+          } catch (error) {
+            console.error('Article extraction error:', error);
+            setStatus(`Failed to extract article. ${error.message}`);
+            return; // Прекращаем работу при ошибке извлечения
+          }
+        }
+
         const newTrack = {
           id: Date.now().toString(),
           timestamp: Date.now(),
-          originalText: finalString,
-          title: "Generating title...", // Временный заголовок на английском
-          isTitleGenerated: false
+          originalText: textToProcess,
+          title: initialTitle,
+          isTitleGenerated: isTitleGenerated
         };
 
         // Сохраняем в БД в начало списка
@@ -138,27 +167,28 @@ function App() {
         // Обновляем UI
         setPlaylist(updatedList);
         setCurrentTrackIndex(0); // Переключаемся на новый трек
-        setStatus('Ready to play'); // Пользователь должен сам нажать Play
+        if (!isUrl) setStatus('Ready to play'); // Для URL статус может быть другим
 
-        // Запускаем фоновую генерацию заголовка
-        const apiKey = localStorage.getItem('mistral_api_key');
-        if (apiKey) {
-          try {
-            const generatedTitle = await generateTitle(apiKey, finalString);
+        // Запускаем фоновую генерацию заголовка (только если еще не сгенерирован)
+        if (!isTitleGenerated) {
+          const apiKey = localStorage.getItem('mistral_api_key');
+          if (apiKey) {
+            try {
+              const generatedTitle = await generateTitle(apiKey, textToProcess);
 
-            // Заново берем список из БД (на случай, если пользователь успел добавить еще один текст)
-            const latestList = await localforage.getItem('mistral_playlist') || [];
-            const trackIndex = latestList.findIndex(t => t.id === newTrack.id);
+              // Заново берем список из БД (на случай, если пользователь успел добавить еще один текст)
+              const latestList = await localforage.getItem('mistral_playlist') || [];
+              const trackIndex = latestList.findIndex(t => t.id === newTrack.id);
 
-            if (trackIndex !== -1) {
-              latestList[trackIndex].title = generatedTitle;
-              latestList[trackIndex].isTitleGenerated = true;
-              await localforage.setItem('mistral_playlist', latestList);
-              setPlaylist(latestList); // Обновляем UI с красивым заголовком
+              if (trackIndex !== -1) {
+                latestList[trackIndex].title = generatedTitle;
+                latestList[trackIndex].isTitleGenerated = true;
+                await localforage.setItem('mistral_playlist', latestList);
+                setPlaylist(latestList); // Обновляем UI с красивым заголовком
+              }
+            } catch (error) {
+              console.error('Title generation error:', error);
             }
-          } catch (error) {
-            console.error('Title generation error:', error);
-            // Можно оставить "Generating title..." или заменить на "Untitled Document" при ошибке
           }
         }
       };
