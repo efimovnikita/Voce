@@ -97,15 +97,15 @@ function App() {
     const apiKey = localStorage.getItem('mistral_api_key');
     if (apiKey) {
       try {
-        setStatus('Loading voices...');
+        setStatus(prev => prev.startsWith('Error:') ? prev : 'Loading voices...');
         const fetchedVoices = await fetchVoices(apiKey);
         setVoices(fetchedVoices);
-        setStatus('Ready');
+        setStatus(prev => prev.startsWith('Error:') ? prev : 'Ready');
       } catch (error) {
         setStatus(`Error: ${error.message}`);
       }
     } else {
-      setStatus('Please enter Mistral API Key in Settings');
+      setStatus(prev => prev.startsWith('Error:') ? prev : 'Please enter Mistral API Key in Settings');
     }
   }, []);
 
@@ -123,31 +123,32 @@ function App() {
 
       // Асинхронная функция обработки нового текста
       const processNewSharedText = async () => {
-        let textToProcess = finalString;
+        let textToProcess = finalString.trim();
         let initialTitle = "Generating title...";
         let isTitleGenerated = false;
 
-        // Проверка, является ли текст ссылкой
-        const isUrl = finalString.trim().startsWith('http://') || finalString.trim().startsWith('https://');
+        // Более надежная проверка на URL (регулярное выражение)
+        const urlRegex = /^(http|https):\/\/[^\s$.?#].[^\s]*$/i;
+        const isUrl = urlRegex.test(textToProcess);
 
         if (isUrl) {
-          const ogApiKey = localStorage.getItem('og_api_key');
-          if (!ogApiKey) {
-            setStatus('OpenGraph.io API Key missing. Please check Settings.');
-            return; // Прекращаем работу, не сохраняя ссылку как текст
+          const proxyUrl = localStorage.getItem('cors_proxy_url');
+          if (!proxyUrl) {
+            setStatus('Error: CORS Proxy URL missing. Go to Settings.');
+            return; // Прекращаем работу
           }
 
           try {
             setStatus('Extracting article content...');
-            const article = await fetchAndParseArticle(finalString.trim(), ogApiKey);
+            const article = await fetchAndParseArticle(textToProcess, proxyUrl);
             textToProcess = article.textContent;
             initialTitle = article.title;
             isTitleGenerated = true;
             setStatus('Article extracted');
           } catch (error) {
             console.error('Article extraction error:', error);
-            setStatus(`Failed to extract article. ${error.message}`);
-            return; // Прекращаем работу при ошибке извлечения
+            setStatus(`Error: Extraction failed. ${error.message}`);
+            return; 
           }
         }
 

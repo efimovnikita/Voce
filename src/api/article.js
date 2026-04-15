@@ -1,43 +1,30 @@
 import { Readability } from '@mozilla/readability';
 
 /**  
- * Извлекает чистый текстовый контент по предоставленному URL.  
+ * Извлекает чистый текстовый контент по предоставленному URL используя CORS Proxy.  
  * @param {string} url - Веб-адрес статьи для извлечения.  
- * @param {string} apiKey - API-ключ от сервиса opengraph.io.  
+ * @param {string} proxyUrl - URL вашей серверной функции-прокси.  
  * @returns {Promise<Object>} Объект, содержащий заголовок, текст и метаданные.  
  */  
-export async function fetchAndParseArticle(url, apiKey) {  
+export async function fetchAndParseArticle(url, proxyUrl) {  
   try {  
-    // 1. Запрос к OpenGraph.io для получения HTML  
-    const endpoint = `https://opengraph.io/api/1.1/scrape/${encodeURIComponent(url)}?app_id=${apiKey}`;  
+    // 1. Запрос к вашей серверной функции
+    // Убедимся, что proxyUrl не заканчивается на слеш для корректной конкатенации
+    const baseProxy = proxyUrl.endsWith('/') ? proxyUrl.slice(0, -1) : proxyUrl;
+    const endpoint = `${baseProxy}?url=${encodeURIComponent(url)}`;  
       
     const response = await fetch(endpoint);
-    const contentType = response.headers.get("content-type");
-
+    
     if (!response.ok) {
-      let errorDetails = "";
-      try {
-        if (contentType && contentType.includes("application/json")) {
-          const errData = await response.json();
-          errorDetails = errData.error || errData.message || "";
-        }
-      } catch (e) {
-        // Игнорируем ошибку парсинга ошибки
-      }
-      throw new Error(`Ошибка API OpenGraph (${response.status}): ${errorDetails || response.statusText}`);
+      const errorText = await response.text();
+      throw new Error(`Ошибка прокси-сервера (${response.status}): ${errorText || response.statusText}`);
     }
       
-    let rawHtml;
-    if (contentType && contentType.includes("application/json")) {
-      const data = await response.json();
-      rawHtml = data.html || data.htmlContent || (typeof data === 'string' ? data : null);
-    } else {
-      // Если вернулся не JSON, пробуем прочитать как текст (возможно, это и есть HTML)
-      rawHtml = await response.text();
-    }
+    // Наша функция возвращает сырой HTML напрямую
+    const rawHtml = await response.text();
       
     if (typeof rawHtml !== 'string' || !rawHtml.includes('<html')) {  
-        throw new Error("Неверный формат ответа: ожидался HTML-контент");  
+        throw new Error("Неверный формат ответа: ожидался HTML-контент. Проверьте URL прокси-сервера.");  
     }
 
     // 2. Создание виртуального DOM из строки HTML  

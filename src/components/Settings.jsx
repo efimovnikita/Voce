@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 // Добавлен пропс onClearHistory
 const Settings = ({ voices, onSettingsChange, onClose, onClearHistory, languageLevel, onLanguageLevelChange }) => {
   const [apiKey, setApiKey] = useState(localStorage.getItem('mistral_api_key') || '');
-  const [ogApiKey, setOgApiKey] = useState(localStorage.getItem('og_api_key') || '');
+  const [proxyUrl, setProxyUrl] = useState(localStorage.getItem('cors_proxy_url') || '');
   const [voiceId, setVoiceId] = useState(localStorage.getItem('mistral_voice_id') || '');
   const [currentLanguageLevel, setCurrentLanguageLevel] = useState(languageLevel || 'A2');
 
@@ -14,10 +14,10 @@ const Settings = ({ voices, onSettingsChange, onClose, onClearHistory, languageL
     if (onSettingsChange) onSettingsChange();
   };
 
-  const handleOgApiKeyChange = (e) => {
+  const handleProxyUrlChange = (e) => {
     const value = e.target.value;
-    setOgApiKey(value);
-    localStorage.setItem('og_api_key', value);
+    setProxyUrl(value);
+    localStorage.setItem('cors_proxy_url', value);
     if (onSettingsChange) onSettingsChange();
   };
 
@@ -64,15 +64,15 @@ const Settings = ({ voices, onSettingsChange, onClose, onClearHistory, languageL
         </div>
 
         <div className="flex flex-col space-y-1.5">
-          <label htmlFor="og-api-key" className="text-sm font-medium text-slate-700">
-            OpenGraph.io API Key (for article extraction)
+          <label htmlFor="proxy-url" className="text-sm font-medium text-slate-700">
+            CORS Proxy URL (Serverless Function)
           </label>
           <input
-            id="og-api-key"
-            type="password"
-            value={ogApiKey}
-            onChange={handleOgApiKeyChange}
-            placeholder="Enter your OpenGraph.io API key"
+            id="proxy-url"
+            type="text"
+            value={proxyUrl}
+            onChange={handleProxyUrlChange}
+            placeholder="https://your-function-url.a.run.app"
             className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
           />
         </div>
