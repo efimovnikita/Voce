@@ -749,9 +749,9 @@ function App() {
               </svg>
             </div>
 
-            <h3 className="text-xl font-bold text-white mb-2">Новая версия!</h3>
+            <h3 className="text-xl font-bold text-white mb-2">New Version!</h3>
             <p className="text-slate-400 text-sm mb-6 leading-relaxed">
-              Доступно свежее обновление приложения. Обновитесь сейчас, чтобы применить изменения.
+              A fresh update is available. Update now to apply the changes.
             </p>
 
             <div className="flex space-x-3 w-full">
@@ -759,13 +759,13 @@ function App() {
                 onClick={() => setNeedRefresh(false)}
                 className="flex-1 py-3 px-4 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl font-semibold transition-colors focus:outline-none"
               >
-                Позже
+                Later
               </button>
               <button
                 onClick={() => updateServiceWorker(true)}
                 className="flex-1 py-3 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-semibold transition-all shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 focus:outline-none"
               >
-                Обновить
+                Update
               </button>
             </div>
 
