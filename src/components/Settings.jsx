@@ -6,6 +6,7 @@ const Settings = ({ voices, onSettingsChange, onClose, onClearHistory, languageL
   const [proxyUrl, setProxyUrl] = useState(localStorage.getItem('cors_proxy_url') || '');
   const [voiceId, setVoiceId] = useState(localStorage.getItem('mistral_voice_id') || '');
   const [currentLanguageLevel, setCurrentLanguageLevel] = useState(languageLevel || 'A2');
+  const [autoplay, setAutoplay] = useState(localStorage.getItem('mistral_autoplay') === 'true');
 
   const handleApiKeyChange = (e) => {
     const value = e.target.value;
@@ -33,6 +34,13 @@ const Settings = ({ voices, onSettingsChange, onClose, onClearHistory, languageL
     setCurrentLanguageLevel(value);
     localStorage.setItem('mistral_language_level', value);
     if (onLanguageLevelChange) onLanguageLevelChange(value);
+    if (onSettingsChange) onSettingsChange();
+  };
+
+  const handleAutoplayChange = (e) => {
+    const value = e.target.checked;
+    setAutoplay(value);
+    localStorage.setItem('mistral_autoplay', value);
     if (onSettingsChange) onSettingsChange();
   };
 
@@ -109,6 +117,23 @@ const Settings = ({ voices, onSettingsChange, onClose, onClearHistory, languageL
             <option value="A2">A2 (Basic)</option>
             <option value="B1">B1 (Intermediate)</option>
           </select>
+        </div>
+
+        {/* --- Autoplay Toggle --- */}
+        <div className="flex items-center justify-between py-2">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-slate-700">Autoplay</span>
+            <span className="text-xs text-slate-500">Play next track automatically</span>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input 
+              type="checkbox" 
+              checked={autoplay}
+              onChange={handleAutoplayChange}
+              className="sr-only peer" 
+            />
+            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+          </label>
         </div>
 
         {/* --- Новая кнопка очистки кэша --- */}

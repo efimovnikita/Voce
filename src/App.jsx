@@ -26,6 +26,9 @@ function App() {
   const [languageLevel, setLanguageLevel] = useState(() => {
       return localStorage.getItem('mistral_language_level') || 'A2';
     });
+  const [isAutoplay, setIsAutoplay] = useState(() => {
+    return localStorage.getItem('mistral_autoplay') === 'true';
+  });
   const [dailyListeningTime, setDailyListeningTime] = useState(0);
 
   const audioRef = useRef(new Audio());
@@ -236,10 +239,10 @@ function App() {
   };
 
   // Функция для фоновой предзагрузки аудио
-  const preloadChunk = async (index) => {
+  const preloadChunk = async (index, trackIndex) => {
     if (index >= chunksRef.current.length || preloadedUrlsRef.current[index]) return;
 
-    const currentTrack = playlist[currentTrackIndex];
+    const currentTrack = playlist[trackIndex];
     if (!currentTrack) return;
 
     try {
@@ -266,15 +269,23 @@ function App() {
     }
   };
 
-  const playNextChunk = async () => {
+  const playNextChunk = async (trackIndex = currentTrackIndex) => {
     const currentIndex = currentChunkIndexRef.current;
-    const currentTrack = playlist[currentTrackIndex];
+    const currentTrack = playlist[trackIndex];
 
     if (currentIndex >= chunksRef.current.length) {
       setIsPlaying(false);
       setStatus('Finished reading');
       Object.values(preloadedUrlsRef.current).forEach(url => URL.revokeObjectURL(url));
       preloadedUrlsRef.current = {};
+
+      // === Autoplay Logic ===
+      if (isAutoplay && trackIndex < playlist.length - 1) {
+        const nextIndex = trackIndex + 1;
+        setCurrentTrackIndex(nextIndex);
+        setStatus('Autoplay: loading next track...');
+        processAndPlay(nextIndex);
+      }
       return;
     }
 
@@ -323,12 +334,12 @@ function App() {
       await audioRef.current.play();
       setIsPlaying(true);
 
-      preloadChunk(currentIndex + 1);
+      preloadChunk(currentIndex + 1, trackIndex);
 
       audioRef.current.onended = () => {
         URL.revokeObjectURL(audioUrl);
         currentChunkIndexRef.current++;
-        playNextChunk();
+        playNextChunk(trackIndex);
       };
     } catch (error) {
       setIsLoading(false);
@@ -337,8 +348,9 @@ function App() {
     }
   };
 
-  const processAndPlay = async () => {
-    const currentTrack = playlist[currentTrackIndex];
+  const processAndPlay = async (targetIndex = null) => {
+    const indexToPlay = targetIndex !== null ? targetIndex : currentTrackIndex;
+    const currentTrack = playlist[indexToPlay];
     const currentText = currentTrack?.originalText;
 
     if (!currentText) return;
@@ -350,7 +362,7 @@ function App() {
       if (currentTrack.simplifiedText) {
           chunksRef.current = splitIntoChunks(currentTrack.simplifiedText);
           currentChunkIndexRef.current = 0;
-          playNextChunk();
+          playNextChunk(indexToPlay);
           return;
       }
 
@@ -389,7 +401,7 @@ function App() {
 
         chunksRef.current = splitIntoChunks(simplifiedText);
         currentChunkIndexRef.current = 0;
-        playNextChunk();
+        playNextChunk(indexToPlay);
       } catch (error) {
         setIsLoading(false);
         setStatus(`Simplification error: ${error.message}`);
@@ -397,7 +409,7 @@ function App() {
     } else {
       chunksRef.current = splitIntoChunks(currentText);
       currentChunkIndexRef.current = 0;
-      playNextChunk();
+      playNextChunk(indexToPlay);
     }
   };
 
@@ -485,6 +497,7 @@ function App() {
 
   const handleSettingsChange = () => {
     setTrigger(prev => prev + 1);
+    setIsAutoplay(localStorage.getItem('mistral_autoplay') === 'true');
   };
 
   const handleDownloadOffline = async () => {
