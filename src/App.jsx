@@ -279,6 +279,19 @@ function App() {
       Object.values(preloadedUrlsRef.current).forEach(url => URL.revokeObjectURL(url));
       preloadedUrlsRef.current = {};
 
+      // Помечаем статью как прослушанную
+      const trackId = currentTrack.id;
+      setPlaylist(prev => {
+        const idx = prev.findIndex(t => t.id === trackId);
+        if (idx !== -1 && !prev[idx].isListened) {
+          const updated = [...prev];
+          updated[idx] = { ...updated[idx], isListened: true };
+          localforage.setItem('mistral_playlist', updated);
+          return updated;
+        }
+        return prev;
+      });
+
       // === Autoplay Logic ===
       if (isAutoplay && trackIndex < playlist.length - 1) {
         const nextIndex = trackIndex + 1;
@@ -605,7 +618,11 @@ function App() {
 
         {playlist.length > 0 && (
           <div className="absolute top-12 left-6 right-16 pointer-events-auto overflow-hidden flex items-center space-x-2">
-              <p className="text-xs text-slate-500 font-light truncate opacity-80 max-w-[80%]">
+              <p className={`text-xs truncate max-w-[80%] transition-all duration-500 ${
+                playlist[currentTrackIndex]?.isListened 
+                  ? 'text-slate-500 font-light opacity-50' 
+                  : 'text-slate-200 font-medium opacity-100'
+              }`}>
                 {playlist[currentTrackIndex].title}
               </p>
 
