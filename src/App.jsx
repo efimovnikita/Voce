@@ -5,9 +5,11 @@ import localforage from 'localforage'
 
 import Settings from './components/Settings'
 import Player from './components/Player'
+import BulkDownloadPanel from './components/BulkDownloadPanel'
 import { fetchVoices, generateSpeechStreaming, simplifyTextParagraph, generateTitle, detectLanguage } from './api/mistral'
 import { fetchAndParseArticle } from './api/article'
 import { splitIntoChunks, splitBySentences } from './utils/chunking'
+import { downloadArticle, fetchAudioWithRetry } from './utils/download'
 
 function App() {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -18,6 +20,7 @@ function App() {
   const [playlist, setPlaylist] = useState([]);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isBulkDownloadOpen, setIsBulkDownloadOpen] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isSimplifyMode, setIsSimplifyMode] = useState(() => {
       const savedMode = localStorage.getItem('mistral_simplify_mode');
@@ -216,27 +219,6 @@ function App() {
       };
       loadPlaylist();
     }, []);
-
-  // Функция-обертка для загрузки аудио с механизмом повторных попыток
-  const fetchAudioWithRetry = async (apiKey, text, voiceId, maxRetries = 5) => {
-    let attempt = 0;
-    while (attempt < maxRetries) {
-      try {
-        return await generateSpeechStreaming(apiKey, text, voiceId);
-      } catch (error) {
-        attempt++;
-        console.warn(`[Audio Fetch] Ошибка загрузки чанка (попытка ${attempt}/${maxRetries}):`, error);
-
-        if (attempt >= maxRetries) {
-          throw new Error(`Не удалось загрузить часть аудио после ${maxRetries} попыток.`);
-        }
-
-        // Задержка перед следующей попыткой: 1 сек, 2 сек, 3 сек...
-        // Это помогает при временных проблемах с сетью или лимитах API
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-      }
-    }
-  };
 
   // Функция для фоновой предзагрузки аудио
   const preloadChunk = async (index, trackIndex) => {
@@ -529,66 +511,31 @@ function App() {
     setStatus(isSimplifyMode ? 'Preparing simplified text and audio...' : 'Preparing to download audio...');
 
     try {
-      let textToRead = '';
-      const currentList = await localforage.getItem('mistral_playlist') || [];
-      const trackIndex = currentList.findIndex(t => t.id === currentTrack.id);
-
-      if (isSimplifyMode) {
-        // === РЕЖИМ УПРОЩЕНИЯ ===
-        if (currentTrack.simplifiedText) {
-            // Если уже упрощали ранее, берем готовое
-            textToRead = currentTrack.simplifiedText;
-        } else {
-          const paragraphs = splitBySentences(currentTrack.originalText, 5);
-                      
-          setStatus('Detecting language...');
-          const excerptForDetection = paragraphs[0] || currentTrack.originalText.substring(0, 500);
-          const detectedLanguage = await detectLanguage(apiKey, excerptForDetection);
-          
-          let generatedSimplifiedText = '';
-
-          for (let i = 0; i < paragraphs.length; i++) {
-            setStatus(`Simplifying in ${detectedLanguage}: part ${i + 1} of ${paragraphs.length}...`);
-            const simplified = await simplifyTextParagraph(apiKey, paragraphs[i], detectedLanguage, languageLevel);
-            generatedSimplifiedText += simplified + '\n\n';
+      await downloadArticle({
+        article: currentTrack,
+        isSimplifyMode,
+        apiKey,
+        voiceId,
+        languageLevel,
+        onProgress: (statusText, progress) => {
+          if (progress === -1) {
+            setStatus(`Download error: ${statusText}`);
+          } else {
+            setStatus(statusText);
           }
-          textToRead = generatedSimplifiedText;
-
-          if (trackIndex !== -1) {
-            currentList[trackIndex].simplifiedText = textToRead;
-            await localforage.setItem('mistral_playlist', currentList);
-            setPlaylist(currentList);
-          }
+        },
+        onUpdateTrack: (updatedTrack) => {
+          setPlaylist(prev => {
+            const idx = prev.findIndex(t => t.id === updatedTrack.id);
+            if (idx !== -1) {
+              const newList = [...prev];
+              newList[idx] = updatedTrack;
+              return newList;
+            }
+            return prev;
+          });
         }
-      } else {
-        // === ОРИГИНАЛЬНЫЙ РЕЖИМ ===
-        textToRead = currentTrack.originalText;
-      }
-
-      // Разбиваем нужный текст на чанки
-      const chunks = splitIntoChunks(textToRead);
-      const modeStr = isSimplifyMode ? 'simplified' : 'original';
-
-      for (let i = 0; i < chunks.length; i++) {
-        setStatus(`Downloading ${modeStr} part ${i + 1} of ${chunks.length}...`);
-        const audioBlob = await fetchAudioWithRetry(apiKey, chunks[i], voiceId);
-
-        // Сохраняем с пометкой режима (original или simplified)
-        const cacheKey = `offline_audio_${currentTrack.id}_${modeStr}_${i}`;
-        await localforage.setItem(cacheKey, audioBlob);
-      }
-
-      if (trackIndex !== -1) {
-        if (isSimplifyMode) {
-            currentList[trackIndex].isOfflineSimplifiedReady = true;
-        } else {
-            currentList[trackIndex].isOfflineReady = true;
-        }
-        await localforage.setItem('mistral_playlist', currentList);
-        setPlaylist(currentList);
-      }
-
-      setStatus(`Download complete (${modeStr})!`);
+      });
     } catch (error) {
       console.error('Download error:', error);
       setStatus(`Download error: ${error.message}`);
@@ -761,12 +708,30 @@ function App() {
                 onSettingsChange={handleSettingsChange}
                 onClose={() => setIsSettingsOpen(false)}
                 onClearHistory={handleClearHistory}
+                onBulkDownload={() => setIsBulkDownloadOpen(true)}
                 languageLevel={languageLevel}
                 onLanguageLevelChange={setLanguageLevel}
               />
             </div>
           </div>
         )}
+
+      {/* Модальное окно массовой загрузки */}
+      {isBulkDownloadOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
+            <BulkDownloadPanel
+              playlist={playlist}
+              isSimplifyMode={isSimplifyMode}
+              apiKey={localStorage.getItem('mistral_api_key')}
+              voiceId={localStorage.getItem('mistral_voice_id')}
+              languageLevel={languageLevel}
+              onClose={() => setIsBulkDownloadOpen(false)}
+              onUpdatePlaylist={setPlaylist}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Модальное окно обновления PWA */}
       {needRefresh && (
