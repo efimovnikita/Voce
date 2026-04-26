@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 const Settings = ({ voices, onSettingsChange, onClose, onClearHistory, onBulkDownload, languageLevel, onLanguageLevelChange }) => {
   const [apiKey, setApiKey] = useState(localStorage.getItem('mistral_api_key') || '');
   const [proxyUrl, setProxyUrl] = useState(localStorage.getItem('cors_proxy_url') || '');
+  const [youtubeApiKey, setYoutubeApiKey] = useState(localStorage.getItem('youtube_transcript_api_key') || '');
   const [voiceId, setVoiceId] = useState(localStorage.getItem('mistral_voice_id') || '');
   const [currentLanguageLevel, setCurrentLanguageLevel] = useState(languageLevel || 'A2');
   const [autoplay, setAutoplay] = useState(localStorage.getItem('mistral_autoplay') === 'true');
@@ -18,6 +19,13 @@ const Settings = ({ voices, onSettingsChange, onClose, onClearHistory, onBulkDow
     const value = e.target.value;
     setProxyUrl(value);
     localStorage.setItem('cors_proxy_url', value);
+    if (onSettingsChange) onSettingsChange();
+  };
+
+  const handleYoutubeApiKeyChange = (e) => {
+    const value = e.target.value;
+    setYoutubeApiKey(value);
+    localStorage.setItem('youtube_transcript_api_key', value);
     if (onSettingsChange) onSettingsChange();
   };
 
@@ -80,6 +88,20 @@ const Settings = ({ voices, onSettingsChange, onClose, onClearHistory, onBulkDow
             value={proxyUrl}
             onChange={handleProxyUrlChange}
             placeholder="https://your-function-url.a.run.app"
+            className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+          />
+        </div>
+
+        <div className="flex flex-col space-y-1.5">
+          <label htmlFor="youtube-api-key" className="text-sm font-medium text-slate-700">
+            YouTube Transcript API Key
+          </label>
+          <input
+            id="youtube-api-key"
+            type="password"
+            value={youtubeApiKey}
+            onChange={handleYoutubeApiKeyChange}
+            placeholder="Enter YouTube Transcript API key"
             className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
           />
         </div>

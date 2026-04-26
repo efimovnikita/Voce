@@ -8,6 +8,7 @@ import Player from './components/Player'
 import BulkDownloadPanel from './components/BulkDownloadPanel'
 import { fetchVoices, generateSpeechStreaming, simplifyTextParagraph, generateTitle, detectLanguage } from './api/mistral'
 import { fetchAndParseArticle } from './api/article'
+import { isYoutubeUrl, getYoutubeVideoId, fetchYoutubeTranscript } from './api/youtube'
 import { splitIntoChunks, splitBySentences } from './utils/chunking'
 import { downloadArticle, fetchAudioWithRetry } from './utils/download'
 
@@ -138,23 +139,47 @@ function App() {
         const isUrl = urlRegex.test(textToProcess);
 
         if (isUrl) {
-          const proxyUrl = localStorage.getItem('cors_proxy_url');
-          if (!proxyUrl) {
-            setStatus('Error: CORS Proxy URL missing. Go to Settings.');
-            return; // Прекращаем работу
-          }
+          if (isYoutubeUrl(textToProcess)) {
+            const youtubeApiKey = localStorage.getItem('youtube_transcript_api_key');
+            if (!youtubeApiKey) {
+              setStatus('Error: YouTube API Key missing. Go to Settings.');
+              return;
+            }
+            const videoId = getYoutubeVideoId(textToProcess);
+            if (!videoId) {
+              setStatus('Error: Could not extract YouTube Video ID.');
+              return;
+            }
 
-          try {
-            setStatus('Extracting article content...');
-            const article = await fetchAndParseArticle(textToProcess, proxyUrl);
-            textToProcess = article.textContent;
-            initialTitle = article.title;
-            isTitleGenerated = true;
-            setStatus('Article extracted');
-          } catch (error) {
-            console.error('Article extraction error:', error);
-            setStatus(`Error: Extraction failed. ${error.message}`);
-            return; 
+            try {
+              setStatus('Fetching YouTube transcript...');
+              const proxyUrl = localStorage.getItem('cors_proxy_url');
+              textToProcess = await fetchYoutubeTranscript(videoId, youtubeApiKey, proxyUrl);
+              setStatus('Transcript fetched');
+            } catch (error) {
+              console.error('YouTube transcript fetch error:', error);
+              setStatus(`Error: YouTube fetch failed. ${error.message}`);
+              return;
+            }
+          } else {
+            const proxyUrl = localStorage.getItem('cors_proxy_url');
+            if (!proxyUrl) {
+              setStatus('Error: CORS Proxy URL missing. Go to Settings.');
+              return; // Прекращаем работу
+            }
+
+            try {
+              setStatus('Extracting article content...');
+              const article = await fetchAndParseArticle(textToProcess, proxyUrl);
+              textToProcess = article.textContent;
+              initialTitle = article.title;
+              isTitleGenerated = true;
+              setStatus('Article extracted');
+            } catch (error) {
+              console.error('Article extraction error:', error);
+              setStatus(`Error: Extraction failed. ${error.message}`);
+              return; 
+            }
           }
         }
 
