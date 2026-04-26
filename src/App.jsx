@@ -105,10 +105,12 @@ function App() {
     const apiKey = localStorage.getItem('mistral_api_key');
     if (apiKey) {
       try {
-        setStatus(prev => prev.startsWith('Error:') ? prev : 'Loading voices...');
+        // Показываем загрузку только если мы в нейтральном состоянии или уже загружаем
+        setStatus(prev => (prev === 'Ready' || prev.startsWith('Please enter') || prev === 'Loading voices...') ? 'Loading voices...' : prev);
         const fetchedVoices = await fetchVoices(apiKey);
         setVoices(fetchedVoices);
-        setStatus(prev => prev.startsWith('Error:') ? prev : 'Ready');
+        // Возвращаем Ready только если статус не был изменен чем-то более важным (ошибкой или загрузкой статьи)
+        setStatus(prev => (prev === 'Loading voices...') ? 'Ready' : prev);
       } catch (error) {
         setStatus(`Error: ${error.message}`);
       }
@@ -122,6 +124,7 @@ function App() {
     const text = params.get('text') || params.get('title') || params.get('url');
 
     if (text) {
+      setStatus('Processing shared content...');
       let finalString = text;
       try {
         finalString = decodeURIComponent(text);
