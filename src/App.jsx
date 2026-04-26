@@ -9,6 +9,7 @@ import BulkDownloadPanel from './components/BulkDownloadPanel'
 import { fetchVoices, generateSpeechStreaming, simplifyTextParagraph, generateTitle, detectLanguage } from './api/mistral'
 import { fetchAndParseArticle } from './api/article'
 import { isYoutubeUrl, getYoutubeVideoId, fetchYoutubeTranscript } from './api/youtube'
+import { translateText } from './api/translate'
 import { splitIntoChunks, splitBySentences } from './utils/chunking'
 import { downloadArticle, fetchAudioWithRetry } from './utils/download'
 
@@ -178,6 +179,27 @@ function App() {
             } catch (error) {
               console.error('Article extraction error:', error);
               setStatus(`Error: Extraction failed. ${error.message}`);
+              return; 
+            }
+          }
+        }
+
+        // --- Translation Logic ---
+        if (localStorage.getItem('use_google_translation') === 'true') {
+          const translateApiKey = localStorage.getItem('google_translate_api_key');
+          const targetLang = localStorage.getItem('target_translation_lang') || 'en';
+          
+          if (translateApiKey) {
+            try {
+              setStatus(`Translating to ${targetLang === 'en' ? 'English' : 'Italian'}...`);
+              textToProcess = await translateText(textToProcess, targetLang, translateApiKey);
+              setStatus('Translation complete');
+            } catch (error) {
+              console.error('Translation error:', error);
+              setStatus(`Error: Translation failed. ${error.message}`);
+              // Продолжаем соригинальным текстом или прерываем? 
+              // Пользователь хотел перевод, так что если он не сработал, 
+              // возможно лучше уведомить об ошибке и не сохранять.
               return; 
             }
           }

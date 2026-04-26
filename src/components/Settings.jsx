@@ -7,6 +7,9 @@ const Settings = ({ voices, onSettingsChange, onClose, onClearHistory, onBulkDow
   const [voiceId, setVoiceId] = useState(localStorage.getItem('mistral_voice_id') || '');
   const [currentLanguageLevel, setCurrentLanguageLevel] = useState(languageLevel || 'A2');
   const [autoplay, setAutoplay] = useState(localStorage.getItem('mistral_autoplay') === 'true');
+  const [useTranslation, setUseTranslation] = useState(localStorage.getItem('use_google_translation') === 'true');
+  const [translateApiKey, setTranslateApiKey] = useState(localStorage.getItem('google_translate_api_key') || '');
+  const [targetLang, setTargetLang] = useState(localStorage.getItem('target_translation_lang') || 'en');
 
   const handleApiKeyChange = (e) => {
     const value = e.target.value;
@@ -26,6 +29,27 @@ const Settings = ({ voices, onSettingsChange, onClose, onClearHistory, onBulkDow
     const value = e.target.value;
     setYoutubeApiKey(value);
     localStorage.setItem('youtube_transcript_api_key', value);
+    if (onSettingsChange) onSettingsChange();
+  };
+
+  const handleTranslateApiKeyChange = (e) => {
+    const value = e.target.value;
+    setTranslateApiKey(value);
+    localStorage.setItem('google_translate_api_key', value);
+    if (onSettingsChange) onSettingsChange();
+  };
+
+  const handleUseTranslationChange = (e) => {
+    const value = e.target.checked;
+    setUseTranslation(value);
+    localStorage.setItem('use_google_translation', value);
+    if (onSettingsChange) onSettingsChange();
+  };
+
+  const handleTargetLangChange = (e) => {
+    const value = e.target.value;
+    setTargetLang(value);
+    localStorage.setItem('target_translation_lang', value);
     if (onSettingsChange) onSettingsChange();
   };
 
@@ -63,7 +87,7 @@ const Settings = ({ voices, onSettingsChange, onClose, onClearHistory, onBulkDow
         </button>
       </div>
       
-      <div className="p-6 space-y-5">
+      <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
         <div className="flex flex-col space-y-1.5">
           <label htmlFor="api-key" className="text-sm font-medium text-slate-700">
             Mistral API Key
@@ -155,6 +179,58 @@ const Settings = ({ voices, onSettingsChange, onClose, onClearHistory, onBulkDow
             />
             <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
           </label>
+        </div>
+
+        {/* --- Translation Settings --- */}
+        <div className="pt-4 border-t border-slate-200">
+          <div className="flex items-center justify-between py-2">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-slate-700">Use Translation</span>
+              <span className="text-xs text-slate-500">Translate text before saving</span>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={useTranslation}
+                onChange={handleUseTranslationChange}
+                className="sr-only peer" 
+              />
+              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+          </div>
+
+          {useTranslation && (
+            <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+              <div className="flex flex-col space-y-1.5">
+                <label htmlFor="translate-api-key" className="text-sm font-medium text-slate-700">
+                  Google Translate API Key
+                </label>
+                <input
+                  id="translate-api-key"
+                  type="password"
+                  value={translateApiKey}
+                  onChange={handleTranslateApiKeyChange}
+                  placeholder="Enter Google Translate API key"
+                  className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+                />
+              </div>
+
+              <div className="flex flex-col space-y-1.5">
+                <label htmlFor="target-lang" className="text-sm font-medium text-slate-700">
+                  Target Language
+                </label>
+                <select
+                  id="target-lang"
+                  value={targetLang}
+                  onChange={handleTargetLangChange}
+                  className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+                >
+                  <option value="en">English</option>
+                  <option value="it">Italian</option>
+                </select>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* --- Новая кнопка массовой загрузки --- */}
