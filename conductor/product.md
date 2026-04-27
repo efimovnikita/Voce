@@ -1,6 +1,6 @@
 # Initial Concept
 
-**Mistral Speaker** is a lightweight Progressive Web App (PWA) for Text-to-Speech (TTS) using the Mistral AI API. Users can select text in any app and send it to Mistral Speaker via the "Share" menu to have it read aloud. Key features include support for English and Italian, voice selection, and simple player controls.
+**Mistral Speaker** is a lightweight Progressive Web App (PWA) for Text-to-Speech (TTS) using the Mistral AI API. Users can select text in any app and send it to Mistral Speaker via the "Share" menu to have it read aloud. Key features include support for English, Italian, and Russian, voice selection, and simple player controls.
 
 # Product Definition: Mistral Speaker
 
@@ -22,7 +22,7 @@
 - **OS Integration (Share Target):** Register as a destination in the system's "Share" menu on Android and iOS for instant text-to-speech conversion.
 - **Mistral TTS API Integration:**
   - Dynamic voice selection (fetching available voices via API).
-  - High-quality speech generation in multiple languages (English and Italian).
+  - High-quality speech generation in multiple languages (English, Italian, and Russian).
 - **Player Controls:** Simple, accessible controls for playback management.
 - **Settings Management:** Persistent storage for the Mistral API key and preferred voice selection using local browser storage (`localStorage`).
 - **Support for Long Content:** Robust handling of extensive articles through intelligent text segmentation.

@@ -227,6 +227,7 @@ const Settings = ({ voices, onSettingsChange, onClose, onClearHistory, onBulkDow
                 >
                   <option value="en">English</option>
                   <option value="it">Italian</option>
+                  <option value="ru">Russian</option>
                 </select>
               </div>
             </div>

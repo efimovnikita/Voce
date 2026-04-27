@@ -6,7 +6,7 @@ Add the ability to automatically translate imported text (from articles or YouTu
 ## Scope & Impact
 - Users will be able to toggle translation on/off in the settings.
 - Users can provide their Google Translate API key.
-- Users can select a target language: English (`en`) or Italian (`it`).
+- Users can select a target language: English (`en`), Italian (`it`), or Russian (`ru`).
 - The translation occurs during the import phase (in `processNewSharedText`), meaning the final text saved to the database and read by the TTS engine will be the translated text.
 - No automated tests will be added, as per user request.
 
@@ -28,7 +28,7 @@ Implement a `translateText(text, targetLanguage, apiKey)` function.
 - Add state variables for `isTranslationEnabled`, `googleTranslateApiKey`, and `targetTranslationLang`. Initialize them from `localStorage`.
 - Add a Toggle/Checkbox for "Use Translation".
 - Conditionally render (only if translation is enabled) an input field for "Google Translate API Key".
-- Conditionally render (only if translation is enabled) a `<select>` for "Target Language" with options "English" (`en`) and "Italian" (`it`).
+- Conditionally render (only if translation is enabled) a `<select>` for "Target Language" with options "English" (`en`), "Italian" (`it`), and "Russian" (`ru`).
 - Update the `onChange` handlers to save these values back to `localStorage` and trigger `onSettingsChange`.
 
 ### 3. Update Import Logic (`src/App.jsx`)

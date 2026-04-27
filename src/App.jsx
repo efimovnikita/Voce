@@ -194,7 +194,8 @@ function App() {
           
           if (translateApiKey) {
             try {
-              setStatus(`Translating to ${targetLang === 'en' ? 'English' : 'Italian'}...`);
+              const langNames = { en: 'English', it: 'Italian', ru: 'Russian' };
+              setStatus(`Translating to ${langNames[targetLang] || targetLang}...`);
               textToProcess = await translateText(textToProcess, targetLang, translateApiKey);
               setStatus('Translation complete');
             } catch (error) {
