@@ -618,7 +618,7 @@ function App() {
 
         {/* Статус: прикреплен слева и сверху, занимает всю ширину экрана кроме зоны кнопки настроек */}
         <div className="absolute top-6 left-6 right-16 pointer-events-auto">
-          <p className={`text-sm font-medium leading-relaxed drop-shadow-sm ${status.includes('Error') || status.includes('error') ? 'text-red-400' : 'text-blue-400'}`}>
+          <p className={`text-[11px] sm:text-xs font-medium truncate whitespace-nowrap drop-shadow-sm ${status.includes('Error') || status.includes('error') ? 'text-red-400' : 'text-blue-400'}`}>
             {status}
           </p>
         </div>
