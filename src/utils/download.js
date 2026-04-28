@@ -118,7 +118,7 @@ export const downloadArticle = async ({
       }
       onProgress('Complete!', 100);
     } else {
-      onProgress(`Errors: ${failedChunks}. Click download again to retry.`, 100);
+      onProgress(`Errors: ${failedChunks} chunks. Click download to retry.`, 100);
       // Не бросаем ошибку здесь, чтобы процесс Bulk Download мог продолжаться для других статей
     }
   } catch (error) {
