@@ -15,40 +15,47 @@ export const fetchVoices = async (apiKey) => {
 export const generateSpeechStreaming = async (apiKey, input, voiceId) => {
   const client = getClient(apiKey);
   
-  const stream = await client.audio.speech.complete({
-    model: "voxtral-mini-tts-2603",
-    input: input,
-    voiceId: voiceId,
-    responseFormat: "mp3", // Using mp3 for broad browser support
-    stream: true,
-  });
+  try {
+    const stream = await client.audio.speech.complete({
+      model: "voxtral-mini-tts-2603",
+      input: input,
+      voiceId: voiceId,
+      responseFormat: "mp3", 
+      stream: true,
+    });
 
-  const audioChunks = [];
+    const audioChunks = [];
 
-  for await (const event of stream) {
-    if (event.event === "speech.audio.delta") {
-      const base64Data = event.data.audioData;
-      const binaryString = atob(base64Data);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
+    for await (const event of stream) {
+      if (event.event === "speech.audio.delta") {
+        const base64Data = event.data.audioData;
+        const binaryString = atob(base64Data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        audioChunks.push(bytes);
+      } else if (event.event === "speech.audio.done") {
+        console.log("Stream done. Usage:", event.data.usage);
       }
-      audioChunks.push(bytes);
-    } else if (event.event === "speech.audio.done") {
-      console.log("Stream done. Usage:", event.data.usage);
     }
-  }
 
-  // Concatenate all Uint8Array chunks into one
-  const totalLength = audioChunks.reduce((acc, chunk) => acc + chunk.length, 0);
-  const result = new Uint8Array(totalLength);
-  let offset = 0;
-  for (const chunk of audioChunks) {
-    result.set(chunk, offset);
-    offset += chunk.length;
-  }
+    const totalLength = audioChunks.reduce((acc, chunk) => acc + chunk.length, 0);
+    const result = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of audioChunks) {
+      result.set(chunk, offset);
+      offset += chunk.length;
+    }
 
-  return new Blob([result], { type: 'audio/mpeg' });
+    return new Blob([result], { type: 'audio/mpeg' });
+  } catch (error) {
+    const errorMsg = error.message.toLowerCase();
+    if (errorMsg.includes('safety') || errorMsg.includes('policy') || errorMsg.includes('moderation') || errorMsg.includes('blocked')) {
+      throw new Error('Content blocked by Mistral safety filters');
+    }
+    throw error;
+  }
 };
 
 export const detectLanguage = async (apiKey, textExcerpt) => {

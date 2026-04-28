@@ -77,6 +77,7 @@ export const downloadArticle = async ({
 
     const chunks = splitIntoChunks(textToRead);
     let failedChunks = 0;
+    let blockedChunks = 0;
 
     for (let i = 0; i < chunks.length; i++) {
       const baseProgress = isSimplifyMode ? 20 : 0;
@@ -98,13 +99,17 @@ export const downloadArticle = async ({
         await localforage.setItem(cacheKey, audioBlob);
       } catch (error) {
         console.error(`[Download] Failed to download chunk ${i}:`, error);
-        failedChunks++;
+        if (error.message.includes('safety filters')) {
+          blockedChunks++;
+        } else {
+          failedChunks++;
+        }
         // Не прерываем цикл, продолжаем со следующим чанком
       }
     }
 
     // Финальное обновление статуса в БД только если все чанки скачаны
-    if (failedChunks === 0) {
+    if (failedChunks === 0 && blockedChunks === 0) {
       const finalPlaylist = await localforage.getItem('mistral_playlist') || [];
       const finalIndex = finalPlaylist.findIndex(t => t.id === article.id);
       if (finalIndex !== -1) {
@@ -118,8 +123,11 @@ export const downloadArticle = async ({
       }
       onProgress('Complete!', 100);
     } else {
-      onProgress(`Errors: ${failedChunks} chunks. Click download to retry.`, 100);
-      // Не бросаем ошибку здесь, чтобы процесс Bulk Download мог продолжаться для других статей
+      if (blockedChunks > 0) {
+        onProgress(`Blocked: ${blockedChunks} (Safety). Errors: ${failedChunks}.`, 100);
+      } else {
+        onProgress(`Errors: ${failedChunks} chunks. Click download to retry.`, 100);
+      }
     }
   } catch (error) {
     onProgress(`Error: ${error.message}`, -1); // -1 signal error
