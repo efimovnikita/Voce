@@ -610,6 +610,36 @@ function App() {
       localStorage.setItem('mistral_simplify_mode', newMode);
     };
 
+  const handleCopyChunks = async () => {
+    const currentTrack = playlist[currentTrackIndex];
+    if (!currentTrack) return;
+
+    let textToProcess = '';
+    if (isSimplifyMode) {
+      if (!currentTrack.simplifiedText) {
+        setStatus('Simplified text not generated yet');
+        return;
+      }
+      textToProcess = currentTrack.simplifiedText;
+    } else {
+      textToProcess = currentTrack.originalText;
+    }
+
+    if (!textToProcess) return;
+
+    try {
+      const chunks = splitIntoChunks(textToProcess);
+      const separatedText = chunks.join('\n---\n');
+      await navigator.clipboard.writeText(separatedText);
+      setStatus('Chunks copied to clipboard!');
+      // Возвращаем статус в Ready через 2 секунды
+      setTimeout(() => setStatus('Ready'), 2000);
+    } catch (err) {
+      console.error('Failed to copy chunks:', err);
+      setStatus('Failed to copy to clipboard');
+    }
+  };
+
   return (
     <div className="min-h-screen pb-[env(safe-area-inset-bottom)] bg-slate-900 flex flex-col items-center justify-center relative overflow-hidden">
 
@@ -625,7 +655,9 @@ function App() {
 
         {playlist.length > 0 && (
           <div className="absolute top-12 left-6 right-16 pointer-events-auto overflow-hidden flex items-center space-x-2">
-              <p className={`text-xs truncate max-w-[80%] transition-all duration-500 ${
+              <p 
+                onClick={handleCopyChunks}
+                className={`text-xs truncate max-w-[80%] transition-all duration-500 cursor-pointer ${
                 playlist[currentTrackIndex]?.isListened 
                   ? 'text-slate-500 font-light opacity-50' 
                   : 'text-slate-200 font-medium opacity-100'
