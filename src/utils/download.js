@@ -76,33 +76,51 @@ export const downloadArticle = async ({
     }
 
     const chunks = splitIntoChunks(textToRead);
+    let failedChunks = 0;
 
     for (let i = 0; i < chunks.length; i++) {
       const baseProgress = isSimplifyMode ? 20 : 0;
       const progressRange = isSimplifyMode ? 80 : 100;
       const progress = baseProgress + Math.round((i / chunks.length) * progressRange);
       
-      onProgress(`Downloading part ${i + 1} of ${chunks.length}...`, progress);
-      const audioBlob = await fetchAudioWithRetry(apiKey, chunks[i], voiceId);
-
       const cacheKey = `offline_audio_${article.id}_${modeStr}_${i}`;
-      await localforage.setItem(cacheKey, audioBlob);
-    }
+      
+      try {
+        // Проверяем, не скачан ли уже этот чанк
+        const existingBlob = await localforage.getItem(cacheKey);
+        if (existingBlob) {
+          console.log(`[Download] Chunk ${i} already exists, skipping.`);
+          continue;
+        }
 
-    // Финальное обновление статуса в БД
-    const finalPlaylist = await localforage.getItem('mistral_playlist') || [];
-    const finalIndex = finalPlaylist.findIndex(t => t.id === article.id);
-    if (finalIndex !== -1) {
-      if (isSimplifyMode) {
-        finalPlaylist[finalIndex].isOfflineSimplifiedReady = true;
-      } else {
-        finalPlaylist[finalIndex].isOfflineReady = true;
+        onProgress(`Downloading part ${i + 1} of ${chunks.length}...`, progress);
+        const audioBlob = await fetchAudioWithRetry(apiKey, chunks[i], voiceId);
+        await localforage.setItem(cacheKey, audioBlob);
+      } catch (error) {
+        console.error(`[Download] Failed to download chunk ${i}:`, error);
+        failedChunks++;
+        // Не прерываем цикл, продолжаем со следующим чанком
       }
-      await localforage.setItem('mistral_playlist', finalPlaylist);
-      onUpdateTrack(finalPlaylist[finalIndex]);
     }
 
-    onProgress('Complete!', 100);
+    // Финальное обновление статуса в БД только если все чанки скачаны
+    if (failedChunks === 0) {
+      const finalPlaylist = await localforage.getItem('mistral_playlist') || [];
+      const finalIndex = finalPlaylist.findIndex(t => t.id === article.id);
+      if (finalIndex !== -1) {
+        if (isSimplifyMode) {
+          finalPlaylist[finalIndex].isOfflineSimplifiedReady = true;
+        } else {
+          finalPlaylist[finalIndex].isOfflineReady = true;
+        }
+        await localforage.setItem('mistral_playlist', finalPlaylist);
+        onUpdateTrack(finalPlaylist[finalIndex]);
+      }
+      onProgress('Complete!', 100);
+    } else {
+      onProgress(`Completed with ${failedChunks} errors. Click download again to retry failed parts.`, 100);
+      // Не бросаем ошибку здесь, чтобы процесс Bulk Download мог продолжаться для других статей
+    }
   } catch (error) {
     onProgress(`Error: ${error.message}`, -1); // -1 signal error
     throw error;

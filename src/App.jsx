@@ -350,21 +350,30 @@ function App() {
           audioUrl = URL.createObjectURL(cachedBlob);
           console.log(`[Оффлайн] Воспроизведение чанка ${currentIndex} из памяти`);
         } else {
-          // 2. Если в кэше нет - нужен интернет и ключи API
+          // 2. Если в кэше нет - пробуем скачать (нужен интернет)
           const apiKey = localStorage.getItem('mistral_api_key');
           const voiceId = localStorage.getItem('mistral_voice_id');
 
-          if (!apiKey || !voiceId) {
-            setStatus(!apiKey ? 'Missing API Key' : 'Please select a voice in Settings');
-            setIsPlaying(false);
+          if (apiKey && voiceId) {
+            try {
+              setStatus(`Generating audio for part ${currentIndex + 1}...`);
+              const text = chunksRef.current[currentIndex];
+              const audioBlob = await fetchAudioWithRetry(apiKey, text, voiceId);
+              audioUrl = URL.createObjectURL(audioBlob);
+            } catch (err) {
+              console.warn(`[Playback] Failed to fetch chunk ${currentIndex}, skipping...`, err);
+              // Если скачать не удалось (нет интернета или ошибка API), просто идем к следующему
+              currentChunkIndexRef.current++;
+              setIsLoading(false);
+              return playNextChunk(trackIndex);
+            }
+          } else {
+            // Нет ключей - пропускаем чанк
+            console.warn(`[Playback] No API key to fetch missing chunk ${currentIndex}, skipping...`);
+            currentChunkIndexRef.current++;
             setIsLoading(false);
-            return;
+            return playNextChunk(trackIndex);
           }
-
-          setStatus(`Generating audio for part ${currentIndex + 1}...`);
-          const text = chunksRef.current[currentIndex];
-          const audioBlob = await fetchAudioWithRetry(apiKey, text, voiceId);
-          audioUrl = URL.createObjectURL(audioBlob);
         }
         setIsLoading(false);
       } else {
