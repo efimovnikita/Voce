@@ -8,11 +8,17 @@ export const fetchAudioWithRetry = async (apiKey, text, voiceId, maxRetries = 5)
     try {
       return await generateSpeechStreaming(apiKey, text, voiceId);
     } catch (error) {
+      // Если это ошибка цензуры, выбрасываем её сразу, не тратя время на ретраи
+      if (error.message.includes('safety filters')) {
+        throw error;
+      }
+
       attempt++;
       console.warn(`[Audio Fetch] Ошибка загрузки чанка (попытка ${attempt}/${maxRetries}):`, error);
 
       if (attempt >= maxRetries) {
-        throw new Error(`Не удалось загрузить часть аудио после ${maxRetries} попыток.`);
+        // Пробрасываем оригинальную ошибку вместо создания новой общей
+        throw error;
       }
 
       await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
