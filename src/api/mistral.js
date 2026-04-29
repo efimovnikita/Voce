@@ -82,21 +82,29 @@ export const detectLanguage = async (apiKey, textExcerpt) => {
 export const simplifyTextParagraph = async (apiKey, paragraph, targetLanguage = "Italian", languageLevel = "A2") => {
   const client = getClient(apiKey);
   
-  const response = await client.chat.complete({
-    model: "mistral-medium-latest",
-    messages: [
-      {
-        role: "system",
-        content: `Simplify the following text to make it easier to read and understand (approximately level ${languageLevel}). CRITICAL: You must return the simplified text in the ${targetLanguage} language. Reply ONLY with the simplified text, without any quotes, formatting, explanations, or introductory phrases.`
-      },
-      {
-        role: "user",
-        content: paragraph
-      }
-    ]
-  });
+  try {
+    const response = await client.chat.complete({
+      model: "mistral-medium-latest",
+      messages: [
+        {
+          role: "system",
+          content: `Simplify the following text to make it easier to read and understand (approximately level ${languageLevel}). CRITICAL: You must return the simplified text in the ${targetLanguage} language. Reply ONLY with the simplified text, without any quotes, formatting, explanations, or introductory phrases.`
+        },
+        {
+          role: "user",
+          content: paragraph
+        }
+      ]
+    });
 
-  return response.choices[0].message.content;
+    return response.choices[0].message.content;
+  } catch (error) {
+    const errorMsg = error.message.toLowerCase();
+    if (errorMsg.includes('safety') || errorMsg.includes('policy') || errorMsg.includes('moderation') || errorMsg.includes('blocked')) {
+      throw new Error('Content blocked by Mistral safety filters');
+    }
+    throw error;
+  }
 };
 
 export const generateTitle = async (apiKey, text) => {

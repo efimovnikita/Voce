@@ -21,7 +21,30 @@ export const fetchAudioWithRetry = async (apiKey, text, voiceId, maxRetries = 5)
         throw error;
       }
 
-      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+      // Если 429, ждем дольше
+      const delay = error.message?.includes('429') ? 5000 * attempt : 1000 * attempt;
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+};
+
+export const simplifyTextWithRetry = async (apiKey, paragraph, targetLanguage, languageLevel, maxRetries = 3) => {
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    try {
+      return await simplifyTextParagraph(apiKey, paragraph, targetLanguage, languageLevel);
+    } catch (error) {
+      attempt++;
+      console.warn(`[Simplification] Ошибка (попытка ${attempt}/${maxRetries}):`, error);
+
+      if (attempt >= maxRetries) {
+        throw error;
+      }
+
+      // Если 429 (rate limit), делаем паузу побольше
+      const isRateLimit = error.message?.includes('429') || error.status === 429;
+      const delay = isRateLimit ? 10000 * attempt : 2000 * attempt;
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
 };
@@ -51,7 +74,7 @@ export const downloadArticle = async ({
     }
 
     if (isSimplifyMode) {
-      if (article.simplifiedText) {
+      if (article.simplifiedText && !article.isPartialSimplification) {
         textToRead = article.simplifiedText;
       } else {
         const paragraphs = splitBySentences(article.originalText, 5);
@@ -60,19 +83,37 @@ export const downloadArticle = async ({
         const excerptForDetection = paragraphs[0] || article.originalText.substring(0, 500);
         const detectedLanguage = await detectLanguage(apiKey, excerptForDetection);
         
-        let generatedSimplifiedText = '';
-
+        // Используем сохраненные чанки, если они есть
+        const simplifiedChunks = article.simplifiedChunks || [];
+        
         for (let i = 0; i < paragraphs.length; i++) {
+          if (simplifiedChunks[i]) {
+            console.log(`[Download] Paragraph ${i} already simplified, skipping.`);
+            continue;
+          }
+
           const progress = Math.round((i / paragraphs.length) * 20); // Первый этап (упрощение) - 20% общего прогресса
           onProgress(`Simplifying: part ${i + 1} of ${paragraphs.length}...`, progress);
-          const simplified = await simplifyTextParagraph(apiKey, paragraphs[i], detectedLanguage, languageLevel);
-          generatedSimplifiedText += simplified + '\n\n';
-        }
-        textToRead = generatedSimplifiedText;
+          
+          const simplified = await simplifyTextWithRetry(apiKey, paragraphs[i], detectedLanguage, languageLevel);
+          simplifiedChunks[i] = simplified;
 
-        // Сохраняем упрощенный текст
+          // Сохраняем промежуточный результат после каждого чанка
+          if (trackIndex !== -1) {
+            currentList[trackIndex].simplifiedChunks = simplifiedChunks;
+            currentList[trackIndex].isPartialSimplification = true;
+            await localforage.setItem('mistral_playlist', currentList);
+            onUpdateTrack(currentList[trackIndex]);
+          }
+        }
+        
+        textToRead = simplifiedChunks.join('\n\n');
+
+        // Сохраняем финальный упрощенный текст
         if (trackIndex !== -1) {
           currentList[trackIndex].simplifiedText = textToRead;
+          currentList[trackIndex].simplifiedChunks = simplifiedChunks;
+          currentList[trackIndex].isPartialSimplification = false;
           await localforage.setItem('mistral_playlist', currentList);
           onUpdateTrack(currentList[trackIndex]);
         }
