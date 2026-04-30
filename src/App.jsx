@@ -21,6 +21,7 @@ function App() {
   const [trigger, setTrigger] = useState(0);
   const [playlist, setPlaylist] = useState([]);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
+  const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isBulkDownloadOpen, setIsBulkDownloadOpen] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
@@ -317,6 +318,9 @@ function App() {
   const playNextChunk = async (trackIndex = currentTrackIndex) => {
     const currentIndex = currentChunkIndexRef.current;
     const currentTrack = playlist[trackIndex];
+    
+    // Синхронизируем UI
+    setCurrentChunkIndex(currentIndex);
 
     if (currentIndex >= chunksRef.current.length) {
       setIsPlaying(false);
@@ -526,6 +530,7 @@ function App() {
         // 3. Сбрасываем стейты в React
         setPlaylist([]);
         setCurrentTrackIndex(0);
+        setCurrentChunkIndex(0);
 
         // 4. Останавливаем плеер, если он играл
         if (audioRef.current) {
@@ -542,9 +547,39 @@ function App() {
     }
   };
 
-  const handleRewind = () => {
-    if (audioRef.current) {
-      audioRef.current.currentTime = Math.max(0, audioRef.current.currentTime - 10);
+  const handlePreviousChunk = () => {
+    if (currentChunkIndexRef.current > 0) {
+      currentChunkIndexRef.current--;
+      
+      // Останавливаем текущее воспроизведение
+      if (audioRef.current) {
+        audioRef.current.pause();
+        const oldSrc = audioRef.current.src;
+        if (oldSrc && oldSrc.startsWith('blob:')) {
+          URL.revokeObjectURL(oldSrc);
+        }
+        audioRef.current.src = '';
+      }
+      
+      playNextChunk();
+    }
+  };
+
+  const handleNextChunk = () => {
+    if (currentChunkIndexRef.current < chunksRef.current.length - 1) {
+      currentChunkIndexRef.current++;
+
+      // Останавливаем текущее воспроизведение
+      if (audioRef.current) {
+        audioRef.current.pause();
+        const oldSrc = audioRef.current.src;
+        if (oldSrc && oldSrc.startsWith('blob:')) {
+          URL.revokeObjectURL(oldSrc);
+        }
+        audioRef.current.src = '';
+      }
+
+      playNextChunk();
     }
   };
 
@@ -762,7 +797,6 @@ function App() {
           isPlaying={isPlaying}
           isLoading={isLoading}
           onPlayPause={handlePlayPause}
-          onRewind={handleRewind}
           playbackRate={playbackRate}
           onSpeedChange={handleSpeedChange}
 
@@ -770,6 +804,8 @@ function App() {
           hasNext={currentTrackIndex < playlist.length - 1}
           onPrevious={() => {
             setCurrentTrackIndex(prev => prev - 1);
+            currentChunkIndexRef.current = 0;
+            setCurrentChunkIndex(0);
 
             // Принудительно сбрасываем старый аудио-источник
             if (audioRef.current) {
@@ -783,6 +819,8 @@ function App() {
           }}
           onNext={() => {
             setCurrentTrackIndex(prev => prev + 1);
+            currentChunkIndexRef.current = 0;
+            setCurrentChunkIndex(0);
 
             // Принудительно сбрасываем старый аудио-источник
             if (audioRef.current) {
@@ -794,6 +832,10 @@ function App() {
             setIsPlaying(false);
             setStatus('Ready to play');
           }}
+          onPreviousChunk={handlePreviousChunk}
+          onNextChunk={handleNextChunk}
+          hasPreviousChunk={currentChunkIndex > 0}
+          hasNextChunk={currentChunkIndex < chunksRef.current.length - 1}
         />
 
         {/* Футер с ламповым таймером */}
