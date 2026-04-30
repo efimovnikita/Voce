@@ -14,7 +14,9 @@ const BulkDownloadPanel = ({ playlist, isSimplifyMode, apiKey, voiceId, language
     const runBulkDownload = async () => {
       for (const track of playlist) {
         // Проверяем, нужно ли скачивать
-        const isReady = isSimplifyMode ? track.isOfflineSimplifiedReady : track.isOfflineReady;
+        const effectiveMode = track.mode ? (track.mode === 'simplified') : isSimplifyMode;
+        const isReady = effectiveMode ? track.isOfflineSimplifiedReady : track.isOfflineReady;
+        
         if (isReady) {
           setProgressMap(prev => ({
             ...prev,
@@ -32,7 +34,7 @@ const BulkDownloadPanel = ({ playlist, isSimplifyMode, apiKey, voiceId, language
         try {
           await downloadArticle({
             article: track,
-            isSimplifyMode,
+            isSimplifyMode, // Это остается как дефолт, но downloadArticle приоритетно смотрит на track.mode
             apiKey,
             voiceId,
             languageLevel,
@@ -77,7 +79,7 @@ const BulkDownloadPanel = ({ playlist, isSimplifyMode, apiKey, voiceId, language
         <div>
           <h2 className="text-lg font-bold text-slate-800">Bulk Download</h2>
           <p className="text-xs text-slate-500">
-            {isSimplifyMode ? 'Simplified' : 'Original'} Mode
+            {isSimplifyMode ? 'Simplified' : 'Original'} Mode (Default)
           </p>
         </div>
         <button 
@@ -94,6 +96,7 @@ const BulkDownloadPanel = ({ playlist, isSimplifyMode, apiKey, voiceId, language
         {playlist.map((track) => {
           const state = progressMap[track.id] || { progress: 0, status: 'Waiting...', error: false };
           const isDownloading = currentId === track.id;
+          const trackMode = track.mode || (isSimplifyMode ? 'simplified' : 'original');
           
           return (
             <div 
@@ -103,9 +106,14 @@ const BulkDownloadPanel = ({ playlist, isSimplifyMode, apiKey, voiceId, language
               }`}
             >
               <div className="flex justify-between items-start mb-2 gap-3">
-                <h3 className={`text-sm font-bold truncate flex-1 ${state.error ? 'text-red-600' : 'text-slate-800'}`}>
-                  {track.title}
-                </h3>
+                <div className="flex-1 min-w-0">
+                  <h3 className={`text-sm font-bold truncate ${state.error ? 'text-red-600' : 'text-slate-800'}`}>
+                    {track.title}
+                  </h3>
+                  <p className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">
+                    Mode: {trackMode}
+                  </p>
+                </div>
                 <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
                   state.error ? 'bg-red-50 text-red-600' : 
                   state.progress === 100 ? 'bg-emerald-50 text-emerald-600' :

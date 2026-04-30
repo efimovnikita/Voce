@@ -62,18 +62,19 @@ export const downloadArticle = async ({
     let textToRead = '';
     const currentList = await localforage.getItem('mistral_playlist') || [];
     const trackIndex = currentList.findIndex(t => t.id === article.id);
-    const modeStr = isSimplifyMode ? 'simplified' : 'original';
+    const effectiveSimplifyMode = article.mode ? (article.mode === 'simplified') : isSimplifyMode;
+    const modeStr = effectiveSimplifyMode ? 'simplified' : 'original';
 
     // 1. ПРОВЕРКА: Если уже скачано, пропускаем
-    if (isSimplifyMode && article.isOfflineSimplifiedReady) {
+    if (effectiveSimplifyMode && article.isOfflineSimplifiedReady) {
         onProgress('Already downloaded', 100);
         return;
-    } else if (!isSimplifyMode && article.isOfflineReady) {
+    } else if (!effectiveSimplifyMode && article.isOfflineReady) {
         onProgress('Already downloaded', 100);
         return;
     }
 
-    if (isSimplifyMode) {
+    if (effectiveSimplifyMode) {
       if (article.simplifiedText && !article.isPartialSimplification) {
         textToRead = article.simplifiedText;
       } else {
@@ -127,8 +128,8 @@ export const downloadArticle = async ({
     let blockedChunks = 0;
 
     for (let i = 0; i < chunks.length; i++) {
-      const baseProgress = isSimplifyMode ? 20 : 0;
-      const progressRange = isSimplifyMode ? 80 : 100;
+      const baseProgress = effectiveSimplifyMode ? 20 : 0;
+      const progressRange = effectiveSimplifyMode ? 80 : 100;
       const progress = baseProgress + Math.round((i / chunks.length) * progressRange);
       
       const cacheKey = `offline_audio_${article.id}_${modeStr}_${i}`;
@@ -160,7 +161,7 @@ export const downloadArticle = async ({
       const finalPlaylist = await localforage.getItem('mistral_playlist') || [];
       const finalIndex = finalPlaylist.findIndex(t => t.id === article.id);
       if (finalIndex !== -1) {
-        if (isSimplifyMode) {
+        if (effectiveSimplifyMode) {
           finalPlaylist[finalIndex].isOfflineSimplifiedReady = true;
         } else {
           finalPlaylist[finalIndex].isOfflineReady = true;

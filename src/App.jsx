@@ -214,7 +214,8 @@ function App() {
           timestamp: Date.now(),
           originalText: textToProcess,
           title: initialTitle,
-          isTitleGenerated: isTitleGenerated
+          isTitleGenerated: isTitleGenerated,
+          mode: isSimplifyMode ? 'simplified' : 'original'
         };
 
         // Сохраняем в БД в начало списка
@@ -271,6 +272,16 @@ function App() {
       loadPlaylist();
     }, []);
 
+  // Синхронизируем режим (Original/Simplified) при переключении треков
+  useEffect(() => {
+    if (playlist.length > 0 && playlist[currentTrackIndex]) {
+      const trackMode = playlist[currentTrackIndex].mode;
+      if (trackMode) {
+        setIsSimplifyMode(trackMode === 'simplified');
+      }
+    }
+  }, [currentTrackIndex, playlist]);
+
   // Функция для фоновой предзагрузки аудио
   const preloadChunk = async (index, trackIndex) => {
     if (index >= chunksRef.current.length || preloadedUrlsRef.current[index]) return;
@@ -279,7 +290,8 @@ function App() {
     if (!currentTrack) return;
 
     try {
-      const modeStr = isSimplifyMode ? 'simplified' : 'original';
+      const effectiveSimplifyMode = currentTrack.mode ? (currentTrack.mode === 'simplified') : isSimplifyMode;
+      const modeStr = effectiveSimplifyMode ? 'simplified' : 'original';
       const cacheKey = `offline_audio_${currentTrack.id}_${modeStr}_${index}`;
       const cachedBlob = await localforage.getItem(cacheKey);
 
@@ -342,7 +354,8 @@ function App() {
         setIsLoading(true);
 
         // 1. Ищем в кэше перед воспроизведением
-        const modeStr = isSimplifyMode ? 'simplified' : 'original';
+        const effectiveSimplifyMode = currentTrack.mode ? (currentTrack.mode === 'simplified') : isSimplifyMode;
+        const modeStr = effectiveSimplifyMode ? 'simplified' : 'original';
         const cacheKey = `offline_audio_${currentTrack.id}_${modeStr}_${currentIndex}`;
         const cachedBlob = await localforage.getItem(cacheKey);
 
@@ -410,10 +423,13 @@ function App() {
 
     if (!currentText) return;
 
+    // Используем сохраненный режим статьи, если он есть, иначе текущий стейт
+    const effectiveSimplifyMode = currentTrack.mode ? (currentTrack.mode === 'simplified') : isSimplifyMode;
+
     Object.values(preloadedUrlsRef.current).forEach(url => URL.revokeObjectURL(url));
     preloadedUrlsRef.current = {};
 
-    if (isSimplifyMode) {
+    if (effectiveSimplifyMode) {
       if (currentTrack.simplifiedText) {
           chunksRef.current = splitIntoChunks(currentTrack.simplifiedText);
           currentChunkIndexRef.current = 0;
@@ -604,11 +620,22 @@ function App() {
     }
   };
 
-  const handleModeToggle = () => {
-      const newMode = !isSimplifyMode;
-      setIsSimplifyMode(newMode);
-      localStorage.setItem('mistral_simplify_mode', newMode);
-    };
+  const handleModeToggle = async () => {
+    const newMode = !isSimplifyMode;
+    setIsSimplifyMode(newMode);
+    localStorage.setItem('mistral_simplify_mode', newMode);
+
+    // Сохраняем режим для текущей статьи в плейлисте
+    if (playlist.length > 0 && playlist[currentTrackIndex]) {
+      const updatedPlaylist = [...playlist];
+      updatedPlaylist[currentTrackIndex] = {
+        ...updatedPlaylist[currentTrackIndex],
+        mode: newMode ? 'simplified' : 'original'
+      };
+      setPlaylist(updatedPlaylist);
+      await localforage.setItem('mistral_playlist', updatedPlaylist);
+    }
+  };
 
   const handleCopyChunks = async () => {
     const currentTrack = playlist[currentTrackIndex];
