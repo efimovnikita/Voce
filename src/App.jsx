@@ -24,6 +24,7 @@ function App() {
   const [currentChunkIndex, setCurrentChunkIndex] = useState(0);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isBulkDownloadOpen, setIsBulkDownloadOpen] = useState(false);
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isSimplifyMode, setIsSimplifyMode] = useState(() => {
       const savedMode = localStorage.getItem('mistral_simplify_mode');
@@ -702,6 +703,63 @@ function App() {
     }
   };
 
+  const handleDeleteCurrentTrack = async () => {
+    const currentTrack = playlist[currentTrackIndex];
+    if (!currentTrack) return;
+
+    const confirmDelete = window.confirm(`Are you sure you want to delete "${currentTrack.title}"?`);
+    if (!confirmDelete) return;
+
+    setIsLoading(true);
+    setStatus('Deleting article and audio files...');
+
+    try {
+      // 1. Удаляем связанные аудио файлы из localforage
+      const trackId = currentTrack.id;
+      const keys = await localforage.keys();
+      const audioKeys = keys.filter(key => key.startsWith(`offline_audio_${trackId}_`));
+
+      for (const key of audioKeys) {
+        await localforage.removeItem(key);
+      }
+      console.log(`Deleted ${audioKeys.length} offline audio chunks for track ${trackId}`);
+
+      // 2. Обновляем плейлист
+      const updatedPlaylist = playlist.filter(t => t.id !== trackId);
+      await localforage.setItem('mistral_playlist', updatedPlaylist);
+      setPlaylist(updatedPlaylist);
+
+      // 3. Управляем индексами и состоянием плеера
+      if (updatedPlaylist.length === 0) {
+        setCurrentTrackIndex(0);
+        setCurrentChunkIndex(0);
+        if (audioRef.current) audioRef.current.pause();
+        setIsPlaying(false);
+        setStatus('Playlist empty');
+      } else {
+        // Если удалили последний элемент, сдвигаемся назад
+        if (currentTrackIndex >= updatedPlaylist.length) {
+          setCurrentTrackIndex(updatedPlaylist.length - 1);
+        }
+        // В любом случае сбрасываем чанк и останавливаем плеер (для чистоты)
+        currentChunkIndexRef.current = 0;
+        setCurrentChunkIndex(0);
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.src = '';
+        }
+        setIsPlaying(false);
+        setStatus('Article deleted');
+      }
+    } catch (error) {
+      console.error('Error deleting track:', error);
+      setStatus('Error deleting article');
+    } finally {
+      setIsLoading(false);
+      setIsActionMenuOpen(false);
+    }
+  };
+
   return (
     <div className="min-h-screen pb-[env(safe-area-inset-bottom)] bg-slate-900 flex flex-col items-center justify-center relative overflow-hidden">
 
@@ -716,10 +774,8 @@ function App() {
         </div>
 
         {playlist.length > 0 && (
-          <div className="absolute top-12 left-6 right-16 pointer-events-auto overflow-hidden flex items-center space-x-2">
-              <p 
-                onClick={handleCopyChunks}
-                className={`text-xs truncate max-w-[80%] transition-all duration-500 cursor-pointer ${
+          <div className="absolute top-12 left-6 right-16 pointer-events-auto flex items-center space-x-2">
+              <p className={`text-xs truncate max-w-[80%] transition-all duration-500 ${
                 playlist[currentTrackIndex]?.isListened 
                   ? 'text-slate-500 font-light opacity-50' 
                   : 'text-slate-200 font-medium opacity-100'
@@ -727,16 +783,64 @@ function App() {
                 {playlist[currentTrackIndex].title}
               </p>
 
-              {/* Кнопка скачивания для оффлайн */}
-              <button
-                onClick={handleDownloadOffline}
-                className="text-slate-500 hover:text-blue-400 transition-colors focus:outline-none p-1"
-                title="Скачать аудио для оффлайн"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-              </button>
+              {/* Кнопка меню действий */}
+              <div className="relative">
+                <button
+                  onClick={() => setIsActionMenuOpen(!isActionMenuOpen)}
+                  className="text-slate-500 hover:text-blue-400 transition-colors focus:outline-none p-1"
+                  title="Actions"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                  </svg>
+                </button>
+
+                {/* Выпадающее меню */}
+                {isActionMenuOpen && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-30" 
+                      onClick={() => setIsActionMenuOpen(false)}
+                    ></div>
+                    <div className="absolute right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-40 overflow-hidden py-1">
+                      <button
+                        onClick={() => {
+                          handleDownloadOffline();
+                          setIsActionMenuOpen(false);
+                        }}
+                        className="w-full flex items-center px-4 py-3 text-sm text-slate-200 hover:bg-slate-700 transition-colors"
+                      >
+                        <svg className="w-4 h-4 mr-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Download Audio
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleCopyChunks();
+                          setIsActionMenuOpen(false);
+                        }}
+                        className="w-full flex items-center px-4 py-3 text-sm text-slate-200 hover:bg-slate-700 transition-colors"
+                      >
+                        <svg className="w-4 h-4 mr-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                        </svg>
+                        Copy Chunks
+                      </button>
+                      <div className="h-px bg-slate-700 my-1"></div>
+                      <button
+                        onClick={handleDeleteCurrentTrack}
+                        className="w-full flex items-center px-4 py-3 text-sm text-red-400 hover:bg-red-400/10 transition-colors"
+                      >
+                        <svg className="w-4 h-4 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        Delete Article
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
           </div>
         )}
 
@@ -752,7 +856,7 @@ function App() {
         </button>
 
         {/* Слайдер: жестко зафиксирован справа, под кнопкой настроек */}
-        <div className="absolute top-18 right-6 pointer-events-auto z-20">
+        <div className="absolute top-20 right-6 pointer-events-auto z-20">
           <button
             onClick={handleModeToggle}
             className="relative flex items-center w-48 h-9 rounded-full bg-slate-800 border border-slate-700 p-1 cursor-pointer focus:outline-none shadow-inner"
