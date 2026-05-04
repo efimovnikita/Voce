@@ -37,6 +37,8 @@ function App() {
     return localStorage.getItem('mistral_autoplay') === 'true';
   });
   const [dailyListeningTime, setDailyListeningTime] = useState(0);
+  const [weeklyListeningTime, setWeeklyListeningTime] = useState(0);
+  const [listeningTimeMode, setListeningTimeMode] = useState('today'); // 'today' or 'week'
 
   const audioRef = useRef(new Audio());
   const chunksRef = useRef([]);
@@ -60,18 +62,56 @@ function App() {
 
   // Загрузка времени или сброс при наступлении нового дня
   useEffect(() => {
-    const today = new Date().toLocaleDateString();
-    const savedDate = localStorage.getItem('voce_listening_date');
-    const savedTime = localStorage.getItem('voce_listening_time');
+    const today = new Date().toISOString().split('T')[0];
+    const stats = JSON.parse(localStorage.getItem('voce_listening_stats') || '{}');
+    
+    // Миграция со старых ключей, если они есть
+    const oldDate = localStorage.getItem('voce_listening_date');
+    const oldTime = localStorage.getItem('voce_listening_time');
+    
+    let currentStats = { ...stats };
+    let hasMigration = false;
 
-    if (savedDate === today) {
-      setDailyListeningTime(parseInt(savedTime || '0', 10));
-    } else {
-      // Наступил новый день (или первый запуск)
-      localStorage.setItem('voce_listening_date', today);
-      localStorage.setItem('voce_listening_time', '0');
-      setDailyListeningTime(0);
+    if (oldDate && oldTime) {
+      // Пытаемся понять, какой это день в формате ISO. 
+      // Если oldDate совпадает с текущим toLocaleDateString(), значит это сегодня.
+      if (oldDate === new Date().toLocaleDateString()) {
+        if (!currentStats[today]) {
+          currentStats[today] = parseInt(oldTime, 10);
+          hasMigration = true;
+        }
+      }
+      
+      localStorage.removeItem('voce_listening_date');
+      localStorage.removeItem('voce_listening_time');
     }
+
+    if (hasMigration) {
+      localStorage.setItem('voce_listening_stats', JSON.stringify(currentStats));
+    }
+
+    setDailyListeningTime(currentStats[today] || 0);
+
+    // Расчет недельного времени (текущая календарная неделя с понедельника)
+    const calculateWeekly = (statsObj) => {
+      const now = new Date();
+      const dayOfWeek = now.getDay(); // 0 (Sun) to 6 (Sat)
+      // Находим понедельник текущей недели
+      const diff = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+      const monday = new Date(new Date(now).setDate(diff));
+      monday.setHours(0, 0, 0, 0);
+
+      let sum = 0;
+      for (const [dateStr, time] of Object.entries(statsObj)) {
+        const date = new Date(dateStr);
+        if (date >= monday) {
+          sum += time;
+        }
+      }
+      return sum;
+    };
+
+    setWeeklyListeningTime(calculateWeekly(currentStats));
   }, []);
 
   // Сам таймер
@@ -80,12 +120,20 @@ function App() {
     // Считаем время только когда реально идет воспроизведение
     if (isPlaying && !isLoading) {
       interval = setInterval(() => {
+        const today = new Date().toISOString().split('T')[0];
+        
         setDailyListeningTime(prev => {
           const newTime = prev + 1;
-          // Сохраняем каждую секунду, чтобы не потерять прогресс при перезагрузке страницы
-          localStorage.setItem('voce_listening_time', newTime.toString());
+          
+          // Обновляем статистику в localStorage
+          const stats = JSON.parse(localStorage.getItem('voce_listening_stats') || '{}');
+          stats[today] = newTime;
+          localStorage.setItem('voce_listening_stats', JSON.stringify(stats));
+          
           return newTime;
         });
+
+        setWeeklyListeningTime(prev => prev + 1);
       }, 1000);
     }
     return () => clearInterval(interval);
@@ -944,12 +992,15 @@ function App() {
 
         {/* Футер с ламповым таймером */}
         <footer className="absolute bottom-6 left-0 w-full flex justify-center pointer-events-auto z-10 pb-[env(safe-area-inset-bottom)]">
-          <div className="flex flex-col items-center space-y-1 opacity-80 hover:opacity-100 transition-opacity duration-300">
-            <span className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-medium">
-              Tempo di ascolto
+          <div 
+            onClick={() => setListeningTimeMode(prev => prev === 'today' ? 'week' : 'today')}
+            className="flex flex-col items-center space-y-1 opacity-80 hover:opacity-100 transition-opacity duration-300 cursor-pointer group"
+          >
+            <span className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-medium group-hover:text-blue-400 transition-colors">
+              {listeningTimeMode === 'today' ? 'Tempo di oggi' : 'Tempo della settimana'}
             </span>
             <div
-              className="px-4 py-1.5 bg-slate-900/90 border border-slate-800/50 rounded-lg shadow-inner select-none"
+              className="px-4 py-1.5 bg-slate-900/90 border border-slate-800/50 rounded-lg shadow-inner select-none transition-all group-active:scale-95"
               style={{
                 fontFamily: "'Courier New', Courier, monospace",
                 color: '#ff6b00',
@@ -957,7 +1008,7 @@ function App() {
               }}
             >
               <span className="text-xl sm:text-2xl font-bold tracking-[0.1em]">
-                {formatTimeDigital(dailyListeningTime)}
+                {formatTimeDigital(listeningTimeMode === 'today' ? dailyListeningTime : weeklyListeningTime)}
               </span>
             </div>
           </div>
