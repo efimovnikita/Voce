@@ -1,4 +1,9 @@
-import React, { useMemo } from 'react';
+import React from 'react';
+
+const EQ_BARS = [...Array(16)].map(() => ({
+  duration: 0.8 + Math.random() * 0.5,
+  delay: Math.random() * -2
+}));
 
 const Player = ({
   isPlaying,
@@ -16,14 +21,6 @@ const Player = ({
   hasNextChunk
 }) => {
 
-  // Запоминаем случайные значения один раз при загрузке компонента
-  const eqBars = useMemo(() => {
-    return [...Array(16)].map(() => ({
-      duration: 0.8 + Math.random() * 0.5,
-      delay: Math.random() * -2
-    }));
-  }, []);
-
   return (
     <div className="flex flex-col items-center w-full space-y-10">
 
@@ -38,8 +35,8 @@ const Player = ({
             }
           `}
         </style>
-        {/* Используем наш сохраненный массив eqBars вместо [...Array(16)] */}
-        {eqBars.map((bar, i) => (
+        {/* Используем наш сохраненный массив EQ_BARS */}
+        {EQ_BARS.map((bar, i) => (
           <div
             key={i}
             className={`w-2 rounded-full transition-all duration-500 ${(!isPlaying || isLoading) ? 'bg-slate-800 h-2 opacity-50' : 'bg-blue-500 opacity-100'}`}

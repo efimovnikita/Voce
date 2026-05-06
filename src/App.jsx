@@ -6,7 +6,7 @@ import localforage from 'localforage'
 import Settings from './components/Settings'
 import Player from './components/Player'
 import BulkDownloadPanel from './components/BulkDownloadPanel'
-import { fetchVoices, generateSpeechStreaming, simplifyTextParagraph, generateTitle, detectLanguage } from './api/mistral'
+import { fetchVoices, simplifyTextParagraph, generateTitle, detectLanguage } from './api/mistral'
 import { fetchAndParseArticle } from './api/article'
 import { isYoutubeUrl, getYoutubeVideoId, fetchYoutubeTranscript } from './api/youtube'
 import { translateText } from './api/translate'
@@ -46,13 +46,19 @@ function App() {
   // Новый ref для хранения предзагруженных URL
   const preloadedUrlsRef = useRef({});
   const playbackRateRef = useRef(1);
+  const isSimplifyModeRef = useRef(isSimplifyMode);
+
+  // Синхронизируем ref с актуальным стейтом
+  useEffect(() => {
+    isSimplifyModeRef.current = isSimplifyMode;
+  }, [isSimplifyMode]);
 
   // Инициализация контроля обновлений PWA
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
   } = useRegisterSW({
-    onRegistered(r) {
+    onRegistered(Unused) {
       console.log('SW Registered');
     },
     onRegisterError(error) {
@@ -178,7 +184,7 @@ function App() {
       let finalString = text;
       try {
         finalString = decodeURIComponent(text);
-      } catch (e) {
+      } catch (UnusedError) {
         finalString = text;
       }
 
@@ -308,6 +314,7 @@ function App() {
       // текст не добавился в базу повторно!
       window.history.replaceState({}, document.title, window.location.pathname);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
