@@ -7,9 +7,7 @@ const Settings = ({ voices, onSettingsChange, onClose, onClearHistory, onBulkDow
   const [voiceId, setVoiceId] = useState(localStorage.getItem('mistral_voice_id') || '');
   const [currentLanguageLevel, setCurrentLanguageLevel] = useState(languageLevel || 'A2');
   const [autoplay, setAutoplay] = useState(localStorage.getItem('mistral_autoplay') === 'true');
-  const [useTranslation, setUseTranslation] = useState(localStorage.getItem('use_google_translation') === 'true');
   const [translateApiKey, setTranslateApiKey] = useState(localStorage.getItem('google_translate_api_key') || '');
-  const [targetLang, setTargetLang] = useState(localStorage.getItem('target_translation_lang') || 'en');
 
   const handleApiKeyChange = (e) => {
     const value = e.target.value;
@@ -36,20 +34,6 @@ const Settings = ({ voices, onSettingsChange, onClose, onClearHistory, onBulkDow
     const value = e.target.value;
     setTranslateApiKey(value);
     localStorage.setItem('google_translate_api_key', value);
-    if (onSettingsChange) onSettingsChange();
-  };
-
-  const handleUseTranslationChange = (e) => {
-    const value = e.target.checked;
-    setUseTranslation(value);
-    localStorage.setItem('use_google_translation', value);
-    if (onSettingsChange) onSettingsChange();
-  };
-
-  const handleTargetLangChange = (e) => {
-    const value = e.target.value;
-    setTargetLang(value);
-    localStorage.setItem('target_translation_lang', value);
     if (onSettingsChange) onSettingsChange();
   };
 
@@ -88,170 +72,135 @@ const Settings = ({ voices, onSettingsChange, onClose, onClearHistory, onBulkDow
       </div>
       
       <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200">
-        <div className="flex flex-col space-y-1.5">
-          <label htmlFor="api-key" className="text-sm font-medium text-slate-700">
-            Mistral API Key
-          </label>
-          <input
-            id="api-key"
-            type="password"
-            value={apiKey}
-            onChange={handleApiKeyChange}
-            placeholder="Enter your Mistral API key"
-            className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-          />
-        </div>
-
-        <div className="flex flex-col space-y-1.5">
-          <label htmlFor="proxy-url" className="text-sm font-medium text-slate-700">
-            CORS Proxy URL (Serverless Function)
-          </label>
-          <input
-            id="proxy-url"
-            type="text"
-            value={proxyUrl}
-            onChange={handleProxyUrlChange}
-            placeholder="https://your-function-url.a.run.app"
-            className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-          />
-        </div>
-
-        <div className="flex flex-col space-y-1.5">
-          <label htmlFor="youtube-api-key" className="text-sm font-medium text-slate-700">
-            YouTube Transcript API Key
-          </label>
-          <input
-            id="youtube-api-key"
-            type="password"
-            value={youtubeApiKey}
-            onChange={handleYoutubeApiKeyChange}
-            placeholder="Enter YouTube Transcript API key"
-            className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-          />
-        </div>
-
-        <div className="flex flex-col space-y-1.5">
-          <label htmlFor="voice-select" className="text-sm font-medium text-slate-700">
-            Select Voice
-          </label>
-          <select
-            id="voice-select"
-            value={voiceId}
-            onChange={handleVoiceChange}
-            className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-          >
-            <option value="">Select a voice</option>
-            {voices.map((voice) => (
-              <option key={voice.id} value={voice.id}>
-                {voice.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex flex-col space-y-1.5">
-          <label htmlFor="language-level" className="text-sm font-medium text-slate-700">
-            Language Level for Simplification
-          </label>
-          <select
-            id="language-level"
-            value={currentLanguageLevel}
-            onChange={handleLanguageLevelChange}
-            className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-          >
-            <option value="A2">A2 (Basic)</option>
-            <option value="B1">B1 (Intermediate)</option>
-          </select>
-        </div>
-
-        {/* --- Autoplay Toggle --- */}
-        <div className="flex items-center justify-between py-2">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium text-slate-700">Autoplay</span>
-            <span className="text-xs text-slate-500">Play next track automatically</span>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input 
-              type="checkbox" 
-              checked={autoplay}
-              onChange={handleAutoplayChange}
-              className="sr-only peer" 
+        
+        {/* --- API Keys Group --- */}
+        <div className="space-y-4">
+          <div className="flex flex-col space-y-1.5">
+            <label htmlFor="api-key" className="text-sm font-medium text-slate-700">
+              Mistral API Key
+            </label>
+            <input
+              id="api-key"
+              type="password"
+              value={apiKey}
+              onChange={handleApiKeyChange}
+              placeholder="Enter your Mistral API key"
+              className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
             />
-            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-          </label>
+          </div>
+
+          <div className="flex flex-col space-y-1.5">
+            <label htmlFor="youtube-api-key" className="text-sm font-medium text-slate-700">
+              YouTube Transcript API Key
+            </label>
+            <input
+              id="youtube-api-key"
+              type="password"
+              value={youtubeApiKey}
+              onChange={handleYoutubeApiKeyChange}
+              placeholder="Enter YouTube Transcript API key"
+              className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+            />
+          </div>
+
+          <div className="flex flex-col space-y-1.5">
+            <label htmlFor="translate-api-key" className="text-sm font-medium text-slate-700">
+              Google Translate API Key
+            </label>
+            <input
+              id="translate-api-key"
+              type="password"
+              value={translateApiKey}
+              onChange={handleTranslateApiKeyChange}
+              placeholder="Enter Google Translate API key"
+              className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+            />
+          </div>
         </div>
 
-        {/* --- Translation Settings --- */}
-        <div className="pt-4 border-t border-slate-200">
+        {/* --- Connection & General Group --- */}
+        <div className="pt-4 border-t border-slate-200 space-y-4">
+          <div className="flex flex-col space-y-1.5">
+            <label htmlFor="proxy-url" className="text-sm font-medium text-slate-700">
+              CORS Proxy URL (Serverless Function)
+            </label>
+            <input
+              id="proxy-url"
+              type="text"
+              value={proxyUrl}
+              onChange={handleProxyUrlChange}
+              placeholder="https://your-function-url.a.run.app"
+              className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+            />
+          </div>
+
+          <div className="flex flex-col space-y-1.5">
+            <label htmlFor="voice-select" className="text-sm font-medium text-slate-700">
+              Select Voice
+            </label>
+            <select
+              id="voice-select"
+              value={voiceId}
+              onChange={handleVoiceChange}
+              className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+            >
+              <option value="">Select a voice</option>
+              {voices.map((voice) => (
+                <option key={voice.id} value={voice.id}>
+                  {voice.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col space-y-1.5">
+            <label htmlFor="language-level" className="text-sm font-medium text-slate-700">
+              Language Level for Simplification
+            </label>
+            <select
+              id="language-level"
+              value={currentLanguageLevel}
+              onChange={handleLanguageLevelChange}
+              className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
+            >
+              <option value="A2">A2 (Basic)</option>
+              <option value="B1">B1 (Intermediate)</option>
+            </select>
+          </div>
+
+          {/* --- Autoplay Toggle --- */}
           <div className="flex items-center justify-between py-2">
             <div className="flex flex-col">
-              <span className="text-sm font-medium text-slate-700">Use Translation</span>
-              <span className="text-xs text-slate-500">Translate text before saving</span>
+              <span className="text-sm font-medium text-slate-700">Autoplay</span>
+              <span className="text-xs text-slate-500">Play next track automatically</span>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input 
                 type="checkbox" 
-                checked={useTranslation}
-                onChange={handleUseTranslationChange}
+                checked={autoplay}
+                onChange={handleAutoplayChange}
                 className="sr-only peer" 
               />
               <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
             </label>
           </div>
-
-          {useTranslation && (
-            <div className="mt-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-              <div className="flex flex-col space-y-1.5">
-                <label htmlFor="translate-api-key" className="text-sm font-medium text-slate-700">
-                  Google Translate API Key
-                </label>
-                <input
-                  id="translate-api-key"
-                  type="password"
-                  value={translateApiKey}
-                  onChange={handleTranslateApiKeyChange}
-                  placeholder="Enter Google Translate API key"
-                  className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                />
-              </div>
-
-              <div className="flex flex-col space-y-1.5">
-                <label htmlFor="target-lang" className="text-sm font-medium text-slate-700">
-                  Target Language
-                </label>
-                <select
-                  id="target-lang"
-                  value={targetLang}
-                  onChange={handleTargetLangChange}
-                  className="px-4 py-2.5 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
-                >
-                  <option value="en">English</option>
-                  <option value="it">Italian</option>
-                  <option value="ru">Russian</option>
-                </select>
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* --- Новая кнопка массовой загрузки --- */}
-        <div className="pt-2 border-t border-slate-200">
+        {/* --- Actions Group --- */}
+        <div className="pt-4 border-t border-slate-200 space-y-3">
           <button
             onClick={() => {
               if (onBulkDownload) onBulkDownload();
               onClose();
             }}
-            className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-100 rounded-lg font-medium transition-colors focus:outline-none mb-3"
+            className="w-full flex items-center justify-center space-x-2 py-2.5 px-4 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-100 rounded-lg font-medium transition-colors focus:outline-none"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
             <span>Download All Articles</span>
           </button>
-        </div>
 
-        {/* --- Кнопка очистки кэша --- */}
-        <div className="pt-4 border-t border-slate-200">
           <button
             onClick={() => {
               if (onClearHistory) onClearHistory();

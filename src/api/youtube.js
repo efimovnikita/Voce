@@ -64,9 +64,13 @@ export async function fetchYoutubeTranscript(videoId, apiKey, proxyUrl) {
     console.log('YouTube Transcript API Response:', data);
     
     let videoData;
-    if (Array.isArray(data)) {
+    
+    // Support new format: { transcripts: [{ video_id, content: [...] }] }
+    if (data.transcripts && Array.isArray(data.transcripts)) {
+      videoData = data.transcripts.find(item => item.id === videoId || item.videoId === videoId || item.video_id === videoId) || data.transcripts[0];
+    } else if (Array.isArray(data)) {
       // Search by ID or take the first element if it's a single-result array
-      videoData = data.find(item => item.id === videoId || item.videoId === videoId) || data[0];
+      videoData = data.find(item => item.id === videoId || item.videoId === videoId || item.video_id === videoId) || data[0];
     } else if (data[videoId]) {
       // Format where keys are video IDs
       videoData = data[videoId];
@@ -79,8 +83,8 @@ export async function fetchYoutubeTranscript(videoId, apiKey, proxyUrl) {
       throw new Error(`Video ID ${videoId} not found in the API response.`);
     }
 
-    // Support both 'transcript' and 'text' fields from the API
-    const transcript = videoData.transcript || videoData.text;
+    // Support 'transcript', 'text', and 'content' fields from the API
+    const transcript = videoData.transcript || videoData.text || videoData.content;
 
     // Check for success status or presence of transcript
     if (videoData.status === 'error' || !transcript) {
@@ -91,7 +95,10 @@ export async function fetchYoutubeTranscript(videoId, apiKey, proxyUrl) {
     if (typeof transcript === 'string') {
       return transcript;
     } else if (Array.isArray(transcript)) {
-      return transcript.map(segment => (typeof segment === 'string' ? segment : (segment.text || ''))).join(' ');
+      return transcript.map(segment => {
+        if (typeof segment === 'string') return segment;
+        return segment.text || segment.content || '';
+      }).join(' ');
     } else {
       throw new Error('Transcript format is unrecognized (not a string or array).');
     }

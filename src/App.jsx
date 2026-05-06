@@ -39,6 +39,7 @@ function App() {
   const [dailyListeningTime, setDailyListeningTime] = useState(0);
   const [weeklyListeningTime, setWeeklyListeningTime] = useState(0);
   const [listeningTimeMode, setListeningTimeMode] = useState('today'); // 'today' or 'week'
+  const [sharedContentPending, setSharedContentPending] = useState(null);
 
   const audioRef = useRef(new Audio());
   const chunksRef = useRef([]);
@@ -175,143 +176,140 @@ function App() {
     }
   }, []);
 
+  const handleProcessContent = useCallback(async (content, targetLang = null) => {
+    let textToProcess = content.trim();
+    let initialTitle = "Generating title...";
+    let isTitleGenerated = false;
+
+    // Более надежная проверка на URL (регулярное выражение)
+    const urlRegex = /^(http|https):\/\/[^\s$.?#].[^\s]*$/i;
+    const isUrl = urlRegex.test(textToProcess);
+
+    if (isUrl) {
+      if (isYoutubeUrl(textToProcess)) {
+        const youtubeApiKey = localStorage.getItem('youtube_transcript_api_key');
+        if (!youtubeApiKey) {
+          setStatus('Error: YouTube API Key missing. Go to Settings.');
+          return;
+        }
+        const videoId = getYoutubeVideoId(textToProcess);
+        if (!videoId) {
+          setStatus('Error: Could not extract YouTube Video ID.');
+          return;
+        }
+
+        try {
+          setStatus('Fetching YouTube transcript...');
+          const proxyUrl = localStorage.getItem('cors_proxy_url');
+          textToProcess = await fetchYoutubeTranscript(videoId, youtubeApiKey, proxyUrl);
+          setStatus('Transcript fetched');
+        } catch (error) {
+          console.error('YouTube transcript fetch error:', error);
+          setStatus(`Error: YouTube fetch failed. ${error.message}`);
+          return;
+        }
+      } else {
+        const proxyUrl = localStorage.getItem('cors_proxy_url');
+        if (!proxyUrl) {
+          setStatus('Error: CORS Proxy URL missing. Go to Settings.');
+          return; // Прекращаем работу
+        }
+
+        try {
+          setStatus('Extracting article content...');
+          const article = await fetchAndParseArticle(textToProcess, proxyUrl);
+          textToProcess = article.textContent;
+          initialTitle = article.title;
+          isTitleGenerated = true;
+          setStatus('Article extracted');
+        } catch (error) {
+          console.error('Article extraction error:', error);
+          setStatus(`Error: Extraction failed. ${error.message}`);
+          return; 
+        }
+      }
+    }
+
+    // --- Translation Logic ---
+    if (targetLang && targetLang !== 'original') {
+      const translateApiKey = localStorage.getItem('google_translate_api_key');
+      
+      if (translateApiKey) {
+        try {
+          const langNames = { en: 'English', it: 'Italian', ru: 'Russian' };
+          setStatus(`Translating to ${langNames[targetLang] || targetLang}...`);
+          textToProcess = await translateText(textToProcess, targetLang, translateApiKey);
+          setStatus('Translation complete');
+        } catch (error) {
+          console.error('Translation error:', error);
+          setStatus(`Error: Translation failed. ${error.message}`);
+          return; 
+        }
+      } else {
+        setStatus('Error: Google Translate API Key missing.');
+        return;
+      }
+    }
+
+    const newTrack = {
+      id: Date.now().toString(),
+      timestamp: Date.now(),
+      originalText: textToProcess,
+      title: initialTitle,
+      isTitleGenerated: isTitleGenerated,
+      mode: isSimplifyModeRef.current ? 'simplified' : 'original'
+    };
+
+    // Сохраняем в БД в начало списка
+    const currentList = await localforage.getItem('mistral_playlist') || [];
+    const updatedList = [newTrack, ...currentList];
+    await localforage.setItem('mistral_playlist', updatedList);
+
+    // Обновляем UI
+    setPlaylist(updatedList);
+    setCurrentTrackIndex(0); // Переключаемся на новый трек
+    if (!isUrl) setStatus('Ready to play'); // Для URL статус может быть другим
+
+    // Запускаем фоновую генерацию заголовка (только если еще не сгенерирован)
+    if (!isTitleGenerated) {
+      const apiKey = localStorage.getItem('mistral_api_key');
+      if (apiKey) {
+        try {
+          const generatedTitle = await generateTitle(apiKey, textToProcess);
+
+          // Заново берем список из БД (на случай, если пользователь успел добавить еще один текст)
+          const latestList = await localforage.getItem('mistral_playlist') || [];
+          const trackIndex = latestList.findIndex(t => t.id === newTrack.id);
+
+          if (trackIndex !== -1) {
+            latestList[trackIndex].title = generatedTitle;
+            latestList[trackIndex].isTitleGenerated = true;
+            await localforage.setItem('mistral_playlist', latestList);
+            setPlaylist(latestList); // Обновляем UI с красивым заголовком
+          }
+        } catch (error) {
+          console.error('Title generation error:', error);
+        }
+      }
+    }
+  }, []);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const text = params.get('text') || params.get('title') || params.get('url');
 
     if (text) {
-      setStatus('Processing shared content...');
-      let finalString = text;
+      let decodedText = text;
       try {
-        finalString = decodeURIComponent(text);
+        decodedText = decodeURIComponent(text);
       } catch (UnusedError) {
-        finalString = text;
+        decodedText = text;
       }
-
-      // Асинхронная функция обработки нового текста
-      const processNewSharedText = async () => {
-        let textToProcess = finalString.trim();
-        let initialTitle = "Generating title...";
-        let isTitleGenerated = false;
-
-        // Более надежная проверка на URL (регулярное выражение)
-        const urlRegex = /^(http|https):\/\/[^\s$.?#].[^\s]*$/i;
-        const isUrl = urlRegex.test(textToProcess);
-
-        if (isUrl) {
-          if (isYoutubeUrl(textToProcess)) {
-            const youtubeApiKey = localStorage.getItem('youtube_transcript_api_key');
-            if (!youtubeApiKey) {
-              setStatus('Error: YouTube API Key missing. Go to Settings.');
-              return;
-            }
-            const videoId = getYoutubeVideoId(textToProcess);
-            if (!videoId) {
-              setStatus('Error: Could not extract YouTube Video ID.');
-              return;
-            }
-
-            try {
-              setStatus('Fetching YouTube transcript...');
-              const proxyUrl = localStorage.getItem('cors_proxy_url');
-              textToProcess = await fetchYoutubeTranscript(videoId, youtubeApiKey, proxyUrl);
-              setStatus('Transcript fetched');
-            } catch (error) {
-              console.error('YouTube transcript fetch error:', error);
-              setStatus(`Error: YouTube fetch failed. ${error.message}`);
-              return;
-            }
-          } else {
-            const proxyUrl = localStorage.getItem('cors_proxy_url');
-            if (!proxyUrl) {
-              setStatus('Error: CORS Proxy URL missing. Go to Settings.');
-              return; // Прекращаем работу
-            }
-
-            try {
-              setStatus('Extracting article content...');
-              const article = await fetchAndParseArticle(textToProcess, proxyUrl);
-              textToProcess = article.textContent;
-              initialTitle = article.title;
-              isTitleGenerated = true;
-              setStatus('Article extracted');
-            } catch (error) {
-              console.error('Article extraction error:', error);
-              setStatus(`Error: Extraction failed. ${error.message}`);
-              return; 
-            }
-          }
-        }
-
-        // --- Translation Logic ---
-        if (localStorage.getItem('use_google_translation') === 'true') {
-          const translateApiKey = localStorage.getItem('google_translate_api_key');
-          const targetLang = localStorage.getItem('target_translation_lang') || 'en';
-          
-          if (translateApiKey) {
-            try {
-              const langNames = { en: 'English', it: 'Italian', ru: 'Russian' };
-              setStatus(`Translating to ${langNames[targetLang] || targetLang}...`);
-              textToProcess = await translateText(textToProcess, targetLang, translateApiKey);
-              setStatus('Translation complete');
-            } catch (error) {
-              console.error('Translation error:', error);
-              setStatus(`Error: Translation failed. ${error.message}`);
-              // Продолжаем соригинальным текстом или прерываем? 
-              // Пользователь хотел перевод, так что если он не сработал, 
-              // возможно лучше уведомить об ошибке и не сохранять.
-              return; 
-            }
-          }
-        }
-
-        const newTrack = {
-          id: Date.now().toString(),
-          timestamp: Date.now(),
-          originalText: textToProcess,
-          title: initialTitle,
-          isTitleGenerated: isTitleGenerated,
-          mode: isSimplifyMode ? 'simplified' : 'original'
-        };
-
-        // Сохраняем в БД в начало списка
-        const currentList = await localforage.getItem('mistral_playlist') || [];
-        const updatedList = [newTrack, ...currentList];
-        await localforage.setItem('mistral_playlist', updatedList);
-
-        // Обновляем UI
-        setPlaylist(updatedList);
-        setCurrentTrackIndex(0); // Переключаемся на новый трек
-        if (!isUrl) setStatus('Ready to play'); // Для URL статус может быть другим
-
-        // Запускаем фоновую генерацию заголовка (только если еще не сгенерирован)
-        if (!isTitleGenerated) {
-          const apiKey = localStorage.getItem('mistral_api_key');
-          if (apiKey) {
-            try {
-              const generatedTitle = await generateTitle(apiKey, textToProcess);
-
-              // Заново берем список из БД (на случай, если пользователь успел добавить еще один текст)
-              const latestList = await localforage.getItem('mistral_playlist') || [];
-              const trackIndex = latestList.findIndex(t => t.id === newTrack.id);
-
-              if (trackIndex !== -1) {
-                latestList[trackIndex].title = generatedTitle;
-                latestList[trackIndex].isTitleGenerated = true;
-                await localforage.setItem('mistral_playlist', latestList);
-                setPlaylist(latestList); // Обновляем UI с красивым заголовком
-              }
-            } catch (error) {
-              console.error('Title generation error:', error);
-            }
-          }
-        }
-      };
-
-      processNewSharedText();
-
-      // ОЧЕНЬ ВАЖНО: Очищаем URL, чтобы при обновлении страницы (pull-to-refresh)
-      // текст не добавился в базу повторно!
+      
+      // Показываем модальное окно выбора языка
+      setSharedContentPending(decodedText);
+      
+      // Очищаем URL немедленно
       window.history.replaceState({}, document.title, window.location.pathname);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1021,6 +1019,44 @@ function App() {
           </div>
         </footer>
       </main>
+
+      {/* Модальное окно выбора языка перевода */}
+      {sharedContentPending && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-3xl w-full max-w-[280px] overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] p-6 flex flex-col items-center">
+            <h3 className="text-base font-bold text-slate-200 mb-5">Translate to which language?</h3>
+            <div className="flex flex-col gap-3 w-full">
+              <button
+                onClick={() => {
+                  handleProcessContent(sharedContentPending, 'it');
+                  setSharedContentPending(null);
+                }}
+                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold transition-all shadow-lg shadow-blue-500/20 active:scale-95"
+              >
+                IT
+              </button>
+              <button
+                onClick={() => {
+                  handleProcessContent(sharedContentPending, 'en');
+                  setSharedContentPending(null);
+                }}
+                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold transition-all shadow-lg shadow-blue-500/20 active:scale-95"
+              >
+                EN
+              </button>
+              <button
+                onClick={() => {
+                  handleProcessContent(sharedContentPending, 'original');
+                  setSharedContentPending(null);
+                }}
+                className="w-full py-3 px-4 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-2xl font-medium text-sm transition-colors active:scale-95"
+              >
+                Original
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Модальное окно настроек */}
         {isSettingsOpen && (
