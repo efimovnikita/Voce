@@ -230,6 +230,23 @@ function App() {
       }
     }
 
+    // --- Language Detection and Title Generation ---
+    const originalTextForTitle = textToProcess; // Сохраняем оригинал для заголовка
+    let detectedLanguage = 'English'; // Default
+    
+    const apiKey = localStorage.getItem('mistral_api_key');
+    if (apiKey && !isTitleGenerated) {
+      try {
+        setStatus('Detecting language for title...');
+        const excerptForDetection = originalTextForTitle.substring(0, 500);
+        detectedLanguage = await detectLanguage(apiKey, excerptForDetection);
+        setStatus('Language detected');
+      } catch (error) {
+        console.error('Language detection error:', error);
+        // Не страшно, просто будет английский заголовок
+      }
+    }
+
     // --- Translation Logic ---
     if (targetLang && targetLang !== 'original') {
       const translateApiKey = localStorage.getItem('google_translate_api_key');
@@ -272,10 +289,10 @@ function App() {
 
     // Запускаем фоновую генерацию заголовка (только если еще не сгенерирован)
     if (!isTitleGenerated) {
-      const apiKey = localStorage.getItem('mistral_api_key');
       if (apiKey) {
         try {
-          const generatedTitle = await generateTitle(apiKey, textToProcess);
+          // Используем оригинал и определенный язык
+          const generatedTitle = await generateTitle(apiKey, originalTextForTitle, detectedLanguage);
 
           // Заново берем список из БД (на случай, если пользователь успел добавить еще один текст)
           const latestList = await localforage.getItem('mistral_playlist') || [];

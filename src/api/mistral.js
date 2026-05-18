@@ -107,10 +107,10 @@ export const simplifyTextParagraph = async (apiKey, paragraph, targetLanguage = 
   }
 };
 
-export const generateTitle = async (apiKey, text) => {
+export const generateTitle = async (apiKey, text, language = 'English') => {
   // Берем только начало текста, чтобы не гонять весь лонгрид
   const excerpt = text.substring(0, 500); 
-  const prompt = `Generate a very short title (2 to 5 words) for the following text. Reply ONLY with the title, without quotes or explanations. Text: ${excerpt}`;
+  const prompt = `Generate a very short title (2 to 5 words) for the following text, in ${language}. Reply ONLY with the title, without quotes or explanations. Text: ${excerpt}`;
 
   const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
     method: 'POST',
