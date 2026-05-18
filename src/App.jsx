@@ -236,7 +236,7 @@ function App() {
       
       if (translateApiKey) {
         try {
-          const langNames = { en: 'English', it: 'Italian', ru: 'Russian' };
+          const langNames = { en: 'English', it: 'Italian', es: 'Spanish', pt: 'Portuguese' };
           setStatus(`Translating to ${langNames[targetLang] || targetLang}...`);
           textToProcess = await translateText(textToProcess, targetLang, translateApiKey);
           setStatus('Translation complete');
@@ -1043,6 +1043,24 @@ function App() {
                 className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold transition-all shadow-lg shadow-blue-500/20 active:scale-95"
               >
                 EN
+              </button>
+              <button
+                onClick={() => {
+                  handleProcessContent(sharedContentPending, 'es');
+                  setSharedContentPending(null);
+                }}
+                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold transition-all shadow-lg shadow-blue-500/20 active:scale-95"
+              >
+                ES
+              </button>
+              <button
+                onClick={() => {
+                  handleProcessContent(sharedContentPending, 'pt');
+                  setSharedContentPending(null);
+                }}
+                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-bold transition-all shadow-lg shadow-blue-500/20 active:scale-95"
+              >
+                PT
               </button>
               <button
                 onClick={() => {
