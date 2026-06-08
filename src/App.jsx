@@ -354,6 +354,36 @@ function App() {
     }
   }, [currentTrackIndex, playlist]);
 
+  const checkAndUpdateOfflineStatus = async (trackId, modeStr, totalChunksCount) => {
+    try {
+      for (let i = 0; i < totalChunksCount; i++) {
+        const cacheKey = `offline_audio_${trackId}_${modeStr}_${i}`;
+        const cachedBlob = await localforage.getItem(cacheKey);
+        if (!cachedBlob) return;
+      }
+
+      setPlaylist(prev => {
+        const idx = prev.findIndex(t => t.id === trackId);
+        if (idx !== -1) {
+          const updated = [...prev];
+          const isSimplified = modeStr === 'simplified';
+          if (isSimplified) {
+            if (updated[idx].isOfflineSimplifiedReady) return prev;
+            updated[idx] = { ...updated[idx], isOfflineSimplifiedReady: true };
+          } else {
+            if (updated[idx].isOfflineReady) return prev;
+            updated[idx] = { ...updated[idx], isOfflineReady: true };
+          }
+          localforage.setItem('mistral_playlist', updated);
+          return updated;
+        }
+        return prev;
+      });
+    } catch (err) {
+      console.error('Failed to check and update offline status:', err);
+    }
+  };
+
   // Функция для фоновой предзагрузки аудио
   const preloadChunk = async (index, trackIndex) => {
     if (index >= chunksRef.current.length || preloadedUrlsRef.current[index]) return;
@@ -379,8 +409,13 @@ function App() {
       if (!apiKey || !voiceId) return;
 
       const text = chunksRef.current[index];
+      if (!text) return;
+
       const audioBlob = await fetchAudioWithRetry(apiKey, text, voiceId);
+      await localforage.setItem(cacheKey, audioBlob);
       preloadedUrlsRef.current[index] = URL.createObjectURL(audioBlob);
+
+      checkAndUpdateOfflineStatus(currentTrack.id, modeStr, chunksRef.current.length);
     } catch (error) {
       console.error(`Failed to preload chunk ${index}:`, error);
     }
@@ -447,7 +482,9 @@ function App() {
               setStatus(`Generating audio for part ${currentIndex + 1}...`);
               const text = chunksRef.current[currentIndex];
               const audioBlob = await fetchAudioWithRetry(apiKey, text, voiceId);
+              await localforage.setItem(cacheKey, audioBlob);
               audioUrl = URL.createObjectURL(audioBlob);
+              checkAndUpdateOfflineStatus(currentTrack.id, modeStr, chunksRef.current.length);
             } catch (err) {
               console.warn(`[Playback] Failed to fetch chunk ${currentIndex}, skipping...`, err);
               // Если скачать не удалось (нет интернета или ошибка API), просто идем к следующему
@@ -773,6 +810,66 @@ function App() {
     }
   };
 
+  const handleClearAudioCache = async () => {
+    const currentTrack = playlist[currentTrackIndex];
+    if (!currentTrack) return;
+
+    const confirmClear = window.confirm(`Are you sure you want to clear audio cache for "${currentTrack.title}"?`);
+    if (!confirmClear) return;
+
+    setIsLoading(true);
+    setStatus('Clearing audio cache...');
+
+    try {
+      const trackId = currentTrack.id;
+
+      // 1. Stop playback and reset current track's playback state
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
+      setIsPlaying(false);
+      
+      // Revoke and clear any preloaded URLs
+      Object.values(preloadedUrlsRef.current).forEach(url => URL.revokeObjectURL(url));
+      preloadedUrlsRef.current = {};
+      
+      currentChunkIndexRef.current = 0;
+      setCurrentChunkIndex(0);
+
+      // 2. Delete related audio files from localforage
+      const keys = await localforage.keys();
+      const audioKeys = keys.filter(key => key.startsWith(`offline_audio_${trackId}_`));
+
+      for (const key of audioKeys) {
+        await localforage.removeItem(key);
+      }
+      console.log(`Cleared ${audioKeys.length} offline audio chunks for track ${trackId}`);
+
+      // 3. Reset offline readiness in the playlist
+      const updatedPlaylist = playlist.map(t => {
+        if (t.id === trackId) {
+          return {
+            ...t,
+            isOfflineReady: false,
+            isOfflineSimplifiedReady: false
+          };
+        }
+        return t;
+      });
+      await localforage.setItem('mistral_playlist', updatedPlaylist);
+      setPlaylist(updatedPlaylist);
+
+      setStatus('Audio cache cleared');
+    } catch (error) {
+      console.error('Error clearing audio cache:', error);
+      setStatus('Error clearing audio cache');
+    } finally {
+      setIsLoading(false);
+      setIsActionMenuOpen(false);
+    }
+  };
+
   const handleDeleteCurrentTrack = async () => {
     const currentTrack = playlist[currentTrackIndex];
     if (!currentTrack) return;
@@ -897,6 +994,18 @@ function App() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
                       </svg>
                       Copy Chunks
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleClearAudioCache();
+                        setIsActionMenuOpen(false);
+                      }}
+                      className="w-full flex items-center px-4 py-3 text-sm text-slate-200 hover:bg-slate-700 transition-colors"
+                    >
+                      <svg className="w-4 h-4 mr-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7" />
+                      </svg>
+                      Clear Audio Cache
                     </button>
                     <div className="h-px bg-slate-700 my-1"></div>
                     <button
