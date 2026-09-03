@@ -8,6 +8,13 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
+      registerType: 'autoUpdate',
+      injectManifest: {
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+      },
       manifest: {
         name: 'Voce Mistral Speaker',
         short_name: 'Voce',
@@ -28,17 +35,27 @@ export default defineConfig({
           }
         ],
         share_target: {
-          // Здесь тоже меняем на большую букву
-          action: '/Voce/', 
-          method: 'GET',
-          enctype: 'application/x-www-form-urlencoded',
+          action: '/Voce/share-target', 
+          method: 'POST',
+          enctype: 'multipart/form-data',
           params: {
             title: 'title',
             text: 'text',
-            url: 'url'
+            url: 'url',
+            files: [
+              {
+                name: 'media',
+                accept: ['image/*']
+              }
+            ]
           }
         }
       }
     })
-  ]
+  ],
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './src/test/setup.js',
+  }
 })

@@ -5,43 +5,40 @@ import Player from './Player';
 describe('Player Component', () => {
   const defaultProps = {
     isPlaying: false,
+    isLoading: false,
     onPlayPause: vi.fn(),
-    onRewind: vi.fn(),
-    progress: 30,
-    text: 'Test content to be read aloud'
+    playbackRate: 1,
+    onSpeedChange: vi.fn(),
+    onPrevious: vi.fn(),
+    onNext: vi.fn(),
+    hasPrevious: false,
+    hasNext: false,
+    onPreviousChunk: vi.fn(),
+    onNextChunk: vi.fn(),
+    hasPreviousChunk: false,
+    hasNextChunk: false,
   };
 
-  it('renders playback controls and progress bar', () => {
+  it('renders playback controls', () => {
     render(<Player {...defaultProps} />);
-    expect(screen.getByLabelText(/Play/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Rewind 10 seconds/i)).toBeInTheDocument();
-    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Play$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Change playback speed/i })).toBeInTheDocument();
   });
 
   it('shows pause button when playing', () => {
     render(<Player {...defaultProps} isPlaying={true} />);
-    expect(screen.getByLabelText(/Pause/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Pause$/i })).toBeInTheDocument();
   });
 
   it('calls onPlayPause when play/pause button is clicked', () => {
     render(<Player {...defaultProps} />);
-    fireEvent.click(screen.getByLabelText(/Play/i));
+    fireEvent.click(screen.getByRole('button', { name: /^Play$/i }));
     expect(defaultProps.onPlayPause).toHaveBeenCalled();
   });
 
-  it('calls onRewind when rewind button is clicked', () => {
+  it('calls onSpeedChange when speed button is clicked', () => {
     render(<Player {...defaultProps} />);
-    fireEvent.click(screen.getByLabelText(/Rewind 10 seconds/i));
-    expect(defaultProps.onRewind).toHaveBeenCalled();
-  });
-
-  it('displays the text being read', () => {
-    render(<Player {...defaultProps} />);
-    expect(screen.getByText(defaultProps.text)).toBeInTheDocument();
-  });
-
-  it('renders waveform placeholder', () => {
-    render(<Player {...defaultProps} />);
-    expect(screen.getByTestId('waveform')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Change playback speed/i }));
+    expect(defaultProps.onSpeedChange).toHaveBeenCalled();
   });
 });

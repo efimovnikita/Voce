@@ -12,6 +12,7 @@ import { isYoutubeUrl, getYoutubeVideoId, fetchYoutubeTranscript } from './api/y
 import { translateText } from './api/translate'
 import { splitIntoChunks, splitBySentences } from './utils/chunking'
 import { downloadArticle, fetchAudioWithRetry } from './utils/download'
+import { extractTextFromScreenshot } from './api/ocr'
 
 function App() {
   const [isPlaying, setIsPlaying] = useState(false);
@@ -40,6 +41,8 @@ function App() {
   const [weeklyListeningTime, setWeeklyListeningTime] = useState(0);
   const [listeningTimeMode, setListeningTimeMode] = useState('today'); // 'today' or 'week'
   const [sharedContentPending, setSharedContentPending] = useState(null);
+  const [isOcrLoading, setIsOcrLoading] = useState(false);
+  const fileInputRef = useRef(null);
 
   const audioRef = useRef(new Audio());
   const chunksRef = useRef([]);
@@ -311,26 +314,100 @@ function App() {
     }
   }, []);
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const text = params.get('text') || params.get('title') || params.get('url');
-
-    if (text) {
-      let decodedText = text;
-      try {
-        decodedText = decodeURIComponent(text);
-      } catch (UnusedError) {
-        decodedText = text;
-      }
-      
-      // Показываем модальное окно выбора языка
-      setSharedContentPending(decodedText);
-      
-      // Очищаем URL немедленно
-      window.history.replaceState({}, document.title, window.location.pathname);
+  const handleImageOcr = useCallback(async (imageBlobOrFile) => {
+    const apiKey = localStorage.getItem('mistral_api_key');
+    if (!apiKey) {
+      setStatus('Error: Mistral API Key is required for OCR. Open Settings.');
+      setIsSettingsOpen(true);
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    setIsOcrLoading(true);
+    setStatus('Scanning screenshot with Mistral OCR...');
+
+    try {
+      const extractedText = await extractTextFromScreenshot(apiKey, imageBlobOrFile);
+      if (!extractedText || !extractedText.trim()) {
+        setStatus('No text detected on the image.');
+        return;
+      }
+      setStatus('Text extracted from screenshot');
+      setSharedContentPending(extractedText.trim());
+    } catch (error) {
+      console.error('OCR Error:', error);
+      setStatus(`OCR Error: ${error.message || 'Failed to extract text'}`);
+    } finally {
+      setIsOcrLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    const checkIncomingContent = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const isSharedImage = params.get('sharedImage');
+      const text = params.get('text') || params.get('title') || params.get('url');
+
+      if (isSharedImage) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        try {
+          if ('caches' in window) {
+            const cache = await caches.open('voce-shared-cache');
+            const response = await cache.match('shared-media');
+            if (response) {
+              const imageBlob = await response.blob();
+              await cache.delete('shared-media');
+              if (imageBlob && imageBlob.size > 0) {
+                await handleImageOcr(imageBlob);
+                return;
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Failed to retrieve shared image from cache:', err);
+        }
+      }
+
+      if (text) {
+        let decodedText = text;
+        try {
+          decodedText = decodeURIComponent(text);
+        } catch (UnusedError) {
+          decodedText = text;
+        }
+        
+        // Показываем модальное окно выбора языка
+        setSharedContentPending(decodedText);
+        
+        // Очищаем URL немедленно
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    };
+
+    checkIncomingContent();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handleImageOcr]);
+
+  // Global paste handler to paste screenshots directly into Voce
+  useEffect(() => {
+    const handlePaste = async (event) => {
+      const items = event.clipboardData?.items;
+      if (!items) return;
+
+      for (const item of items) {
+        if (item.type && item.type.startsWith('image/')) {
+          event.preventDefault();
+          const file = item.getAsFile();
+          if (file) {
+            await handleImageOcr(file);
+          }
+          break;
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [handleImageOcr]);
 
   useEffect(() => {
     loadVoices();
@@ -1023,6 +1100,34 @@ function App() {
           </div>
         )}
 
+        {/* Скрытый input для выбора скриншота/изображения */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files && e.target.files[0]) {
+              handleImageOcr(e.target.files[0]);
+              e.target.value = '';
+            }
+          }}
+        />
+
+        {/* Кнопка загрузки скриншота (OCR): слева от настроек */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isOcrLoading}
+          aria-label="Upload Screenshot for OCR"
+          title="Upload Screenshot (Mistral OCR)"
+          className="absolute top-4 right-14 p-2 text-slate-400 hover:text-white transition-colors focus:outline-none pointer-events-auto z-20 disabled:opacity-50"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </button>
+
         {/* Кнопка настроек: жестко привязана к правому верхнему углу */}
         <button
           onClick={() => setIsSettingsOpen(true)}
@@ -1150,7 +1255,10 @@ function App() {
       {sharedContentPending && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
           <div className="bg-slate-800 border border-slate-700 rounded-3xl w-full max-w-[280px] overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] p-6 flex flex-col items-center">
-            <h3 className="text-base font-bold text-slate-200 mb-5">Translate to which language?</h3>
+            <h3 className="text-base font-bold text-slate-200 mb-2">Translate to which language?</h3>
+            <p className="text-xs text-slate-400 mb-4 line-clamp-2 text-center max-w-[240px] italic">
+              "{sharedContentPending.slice(0, 80)}{sharedContentPending.length > 80 ? '...' : ''}"
+            </p>
             <div className="flex flex-col gap-3 w-full">
               <button
                 onClick={() => {
@@ -1199,6 +1307,15 @@ function App() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Модальный оверлей OCR сканирования */}
+      {isOcrLoading && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex flex-col items-center justify-center z-[70] p-6 text-center">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
+          <h3 className="text-base font-bold text-white mb-1">Scanning screenshot...</h3>
+          <p className="text-xs text-slate-400 max-w-xs">Extracting text with Mistral OCR</p>
         </div>
       )}
 

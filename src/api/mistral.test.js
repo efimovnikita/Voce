@@ -28,7 +28,7 @@ describe('Mistral API Client (SDK Streaming)', () => {
   });
 
   it('fetchVoices returns list of voices', async () => {
-    mockList.mockResolvedValue({ items: [{ id: 'v1', name: 'V1' }] });
+    mockList.mockResolvedValue({ items: [{ id: 'v1', name: 'V1', userId: 'user1' }] });
     const voices = await fetchVoices('test-key');
     expect(voices[0].id).toBe('v1');
   });
